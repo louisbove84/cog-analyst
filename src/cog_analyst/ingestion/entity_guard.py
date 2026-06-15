@@ -1,17 +1,13 @@
 """Deterministic entity guard (domain-agnostic).
 
-The LLM cannot be trusted to only emit real entity names. An `EntityRegistry`
+The LLM cannot be trusted to only emit real entity names. An ``EntityRegistry``
 is a hardcoded allowlist for one field (e.g. ``reef_name``): a value that is not
-EXACTLY in the registry is a data violation — logged and refused — so it never
-reaches the database.
-
-This module is part of the reusable engine. Domains supply their own registries
-(see ``cog_analyst.domains.spratly``); the *mechanism* here is generic so a
-future domain (e.g. mainland shipyards) can drop in its own allowlist without
-touching this code.
+EXACTLY in the registry is a data violation. The write path stays raw; callers
+use these registries to validate or filter values against a known set.
 
 Exact matching is intentional. Fuzzy matching would reintroduce the ambiguity
-we are trying to eliminate.
+we are trying to eliminate. Alias reconciliation, when needed, is a deliberate
+downstream step (normalize + exact match against the WEG catalog), not a guess.
 """
 
 from __future__ import annotations
@@ -57,14 +53,12 @@ class EntityRegistry:
         Leading/trailing whitespace is ignored; casing and spelling are NOT
         normalized. Unknown or misspelled values return False by design.
         """
-
         if not isinstance(value, str):
             return False
         return value.strip() in self._allowed_set
 
     def enforce(self, value: str) -> str:
-        """Return the canonical value, or log + raise EntityGuardViolation."""
-
+        """Return the canonical value, or log + raise ``EntityGuardViolation``."""
         candidate = value.strip() if isinstance(value, str) else value
         if candidate in self._allowed_set:
             return candidate

@@ -1,11 +1,12 @@
-"""End-to-end ingestion pipeline: extract -> validate -> guard -> persist.
+"""End-to-end ingestion pipeline: extract -> validate -> persist (raw).
 
-The pipeline is domain-agnostic: callers pass the target schema and a `persist`
-callable, so the same engine ingests weapons, outposts, or any future entity.
-Each snippet flows through the same safe path and produces an `IngestionResult`
-with an explicit status, so a batch run can report exactly what was inserted,
-what was blocked, and what failed — without ever crashing the whole run on one
-bad record.
+The pipeline is domain-agnostic: callers pass the target schema and a ``persist``
+callable, so the same engine ingests weapons, aircraft, radar, or outposts. Each
+snippet flows through the same safe path and produces an ``IngestionResult`` with
+an explicit status, so a batch run reports exactly what was inserted, blocked, or
+failed — without crashing the whole run on one bad record.
+
+Guarding and dedup are intentionally NOT here; they belong to the scrub process.
 """
 
 from __future__ import annotations
@@ -18,14 +19,14 @@ from typing import Callable, Optional, Type, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from cog_analyst.ingestion.entity_guard import EntityGuardViolation
-from cog_analyst.ingestion.extractor import StructuredExtractor
+from cog_analyst.ingestion.interfaces import ExtractionError, StructuredExtractor
 
 logger = logging.getLogger("cog_analyst.pipeline")
 
 TSchema = TypeVar("TSchema", bound=BaseModel)
 
 # A persist function takes a validated model and returns its identifier (e.g.
-# the designator or reef name). It may raise EntityGuardViolation.
+# the designator or reef name).
 PersistFn = Callable[[BaseModel], str]
 
 
@@ -34,6 +35,7 @@ class IngestStatus(str, Enum):
     VALIDATION_ERROR = "validation_error"
     GUARD_VIOLATION = "guard_violation"
     EXTRACTION_ERROR = "extraction_error"
+    PERSISTENCE_ERROR = "persistence_error"
 
 
 @dataclass
@@ -62,11 +64,10 @@ class IngestionPipeline:
     ) -> IngestionResult:
         """Extract ``text`` into ``schema``, then persist it via ``persist``.
 
-        The flow is: extract (LLM) -> validate (Pydantic) -> persist (which runs
-        the entity guard before writing). Each failure mode maps to an explicit
-        status; a guard violation means nothing was written.
+        Flow: extract (LLM) -> validate (Pydantic) -> persist (raw row). Each
+        failure mode maps to an explicit status; nothing partial is reported as
+        success.
         """
-
         name = schema.__name__
 
         try:
@@ -74,7 +75,10 @@ class IngestionPipeline:
         except ValidationError as exc:
             logger.warning("%s validation failed: %s", name, exc)
             return IngestionResult(IngestStatus.VALIDATION_ERROR, name, str(exc))
-        except Exception as exc:  # extractor/LLM/transport failure
+        except ExtractionError as exc:
+            logger.error("%s extraction error: %s", name, exc)
+            return IngestionResult(IngestStatus.EXTRACTION_ERROR, name, str(exc))
+        except Exception as exc:  # noqa: BLE001 - any other extractor failure
             logger.error("%s extraction error: %s", name, exc)
             return IngestionResult(IngestStatus.EXTRACTION_ERROR, name, str(exc))
 
@@ -84,8 +88,8 @@ class IngestionPipeline:
             return IngestionResult(
                 IngestStatus.GUARD_VIOLATION, name, str(exc), exc.value
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - persistence failure
             logger.error("%s persistence error: %s", name, exc)
-            return IngestionResult(IngestStatus.EXTRACTION_ERROR, name, str(exc))
+            return IngestionResult(IngestStatus.PERSISTENCE_ERROR, name, str(exc))
 
         return IngestionResult(IngestStatus.INSERTED, name, "ok", identifier)

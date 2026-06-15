@@ -38,12 +38,30 @@ DEMO_WEAPON_SNIPPETS: List[str] = [
     ),
 ]
 
+DEMO_AIRCRAFT_SNIPPETS: List[str] = [
+    (
+        "[SOURCE: Dahm 2021, Offensive and Defensive Strike (JHU/APL), p.12]\n"
+        "The J-11 is a Chinese fourth-generation multirole fighter derived from "
+        "the Russian Su-27. It has an estimated combat radius of approximately "
+        "1,500 kilometers."
+    ),
+]
+
+DEMO_RADAR_SNIPPETS: List[str] = [
+    (
+        "[SOURCE: Dahm 2021, Offensive and Defensive Strike (JHU/APL), p.21]\n"
+        "The Type 305A is a Chinese air-surveillance radar with a reported "
+        "maximum detection range of about 400 kilometers."
+    ),
+]
+
 DEMO_OUTPOST_SNIPPETS: List[str] = [
     (
         "[SOURCE: Dahm 2021, Offensive and Defensive Strike (JHU/APL), p.9]\n"
         "Fiery Cross Reef has a 3,000-meter runway. Twenty-four fighter-size "
         "hangars are at the airfield. HQ-9B SAMs and YJ-12 anti-ship cruise "
-        "missiles were deployed to Fiery Cross Reef in 2018."
+        "missiles were deployed to Fiery Cross Reef in 2018. J-11 fighters and a "
+        "Type 305A radar have also been observed there."
     ),
     (
         "[SOURCE: Dahm 2021, Offensive and Defensive Strike (JHU/APL), p.9]\n"

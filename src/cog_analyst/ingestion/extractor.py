@@ -1,78 +1,46 @@
-"""Structured extraction via LangChain.
+"""Deterministic structured extractor backed by an OpenAI-compatible chat model.
 
-The LLM is an UNTRUSTED extraction mechanism. We constrain it three ways:
-1. `.with_structured_output(Schema)` forces output into a Pydantic schema.
-2. A strict system prompt forbids inference and demands a source citation.
-3. Downstream, the entity guard + SQLite types reject anything that slips through.
-
-`StructuredExtractor` is an abstract base class (ABC) so the pipeline can be
-unit-tested with a fake subclass and never needs a live API key.
+The LLM is constrained to fill a Pydantic schema and is treated as untrusted.
+``langchain_openai`` is imported lazily inside ``__init__`` so this module (and
+the offline test suite, which uses fake extractors) imports with no LLM
+dependencies installed.
 """
 
 from __future__ import annotations
 
-import logging
-from abc import ABC, abstractmethod
-from typing import Optional, Type, TypeVar
+from typing import Optional, Type
 
-from pydantic import BaseModel
+from cog_analyst.ingestion.interfaces import (
+    ExtractionError,
+    StructuredExtractor,
+    TSchema,
+)
 
-logger = logging.getLogger("cog_analyst.extractor")
-
-TSchema = TypeVar("TSchema", bound=BaseModel)
+__all__ = ["LangChainExtractor"]
 
 _SYSTEM_PROMPT = (
-    "You are a meticulous defense-intelligence data extractor working only with "
-    "open-source text. Extract ONLY facts explicitly stated in the provided "
-    "passage into the required schema. Rules:\n"
-    "- Do NOT infer, estimate, or add knowledge from memory.\n"
-    "- If a field is not explicitly stated in the passage, leave it null "
-    "(for optional fields) rather than guessing.\n"
-    "- Convert ranges to whole kilometers and lengths to whole meters.\n"
-    "- Always populate source_citation with the document and page provided in "
-    "the passage header.\n"
-    "- If the passage does not describe the requested entity at all, return the "
-    "schema with empty/null fields; never fabricate an entity."
+    "You are a strict information extractor for open-source military analysis. "
+    "Extract ONLY facts explicitly stated in the provided text into the given "
+    "schema. Follow these rules without exception:\n"
+    "1. Never infer, guess, or use prior knowledge. If a fact is not in the "
+    "text, leave optional fields null and do not fabricate values.\n"
+    "2. Use exact equipment designators as written in doctrine (e.g. 'HQ-9B', "
+    "not 'HQ-9B SAMs'; 'J-11', not 'J-11 fighters').\n"
+    "3. Always populate source_citation from the passage header or source label "
+    "provided with the text.\n"
+    "4. Do not add fields that are not part of the schema."
 )
 
 
-class StructuredExtractor(ABC):
-    """Anything that can turn text into a validated schema instance."""
-
-    @abstractmethod
-    def extract(self, text: str, schema: Type[TSchema]) -> TSchema:
-        """Extract ``text`` into an instance of ``schema``."""
-        raise NotImplementedError
-
-
 class LangChainExtractor(StructuredExtractor):
-    """Extractor backed by any OpenAI-compatible chat endpoint.
+    """Structured extractor using a LangChain OpenAI-compatible chat model.
 
-    Works against:
-      - OpenAI (default; needs OPENAI_API_KEY)
-      - Ollama        -> base_url="http://localhost:11434/v1", api_key="ollama"
-      - LM Studio     -> base_url="http://localhost:1234/v1",  api_key="lm-studio"
-      - vLLM          -> base_url="http://<host>:8000/v1",     api_key="<any>"
-
-    LangChain is imported lazily so importing this module (and running the
-    deterministic test suite) does not require LangChain or an API key.
-
-    Parameters
-    ----------
-    base_url:
-        OpenAI-compatible endpoint. ``None`` uses the real OpenAI API.
-    api_key:
-        Local servers ignore the value but the client requires *some* string;
-        when ``base_url`` is set and no key is given, a placeholder is used.
-    structured_output_method:
-        Passed to ``with_structured_output``. Local/tool-capable models often
-        do best with ``"function_calling"`` or ``"json_schema"``; ``None`` lets
-        LangChain choose its default.
+    Supports OpenAI, xAI/Grok, Ollama, LM Studio, and vLLM via ``base_url``.
     """
 
     def __init__(
         self,
-        model: str = "gpt-4o-mini",
+        model: str,
         temperature: float = 0.0,
         base_url: Optional[str] = None,
         api_key: Optional[str] = None,
@@ -80,39 +48,50 @@ class LangChainExtractor(StructuredExtractor):
     ) -> None:
         try:
             from langchain_openai import ChatOpenAI
-        except ImportError as exc:  # pragma: no cover - environment dependent
+        except ImportError as exc:  # pragma: no cover - exercised only without deps
             raise ImportError(
-                "LangChainExtractor requires 'langchain-openai'. Install with "
-                "`pip install -e \".[llm]\"`."
+                "LangChainExtractor requires the 'langchain-openai' package. "
+                "Install it with: pip install langchain-openai"
             ) from exc
 
-        self._method = structured_output_method
+        self._structured_output_method = structured_output_method
 
-        kwargs: dict = {"model": model, "temperature": temperature}
+        kwargs = {
+            "model": model,
+            "temperature": temperature,
+        }
         if base_url is not None:
             kwargs["base_url"] = base_url
-            # Local servers don't validate the key, but the client demands one.
+            # Local OpenAI-compatible servers often need no real key; supply a
+            # placeholder so the client constructs without error.
             kwargs["api_key"] = api_key or "local-no-key"
         elif api_key is not None:
             kwargs["api_key"] = api_key
 
-        # temperature=0 for maximum determinism in an extraction task.
-        self._llm = ChatOpenAI(**kwargs)
+        try:
+            self._llm = ChatOpenAI(**kwargs)
+        except Exception as exc:  # noqa: BLE001 - normalize client construction errors
+            raise ExtractionError(f"failed to initialize chat model: {exc}") from exc
 
     def extract(self, text: str, schema: Type[TSchema]) -> TSchema:
-        """Run a single structured-output extraction call."""
-
-        if self._method is not None:
-            structured = self._llm.with_structured_output(schema, method=self._method)
-        else:
-            structured = self._llm.with_structured_output(schema)
         messages = [
             ("system", _SYSTEM_PROMPT),
             ("human", text),
         ]
-        result = structured.invoke(messages)
-        if not isinstance(result, schema):  # defensive; LC should guarantee this
+
+        try:
+            if self._structured_output_method is not None:
+                structured = self._llm.with_structured_output(
+                    schema, method=self._structured_output_method
+                )
+            else:
+                structured = self._llm.with_structured_output(schema)
+            result = structured.invoke(messages)
+        except Exception as exc:  # noqa: BLE001 - normalize transport/client errors
+            raise ExtractionError(f"extraction failed: {exc}") from exc
+
+        if not isinstance(result, schema):
             raise TypeError(
-                f"Extractor returned {type(result)!r}, expected {schema!r}"
+                f"extractor returned {type(result).__name__}, expected {schema.__name__}"
             )
         return result

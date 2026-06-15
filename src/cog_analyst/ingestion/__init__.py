@@ -1,11 +1,12 @@
-"""Ingestion engine: entity guard, structured extractor, and the safe pipeline.
-
-This package is domain-agnostic. Domain allowlists/models live under
-``cog_analyst.domains``.
-"""
+"""Ingestion layer: extractor contracts and the extract-validate-persist pipeline."""
 
 from cog_analyst.ingestion.entity_guard import EntityGuardViolation, EntityRegistry
-from cog_analyst.ingestion.extractor import LangChainExtractor, StructuredExtractor
+from cog_analyst.ingestion.extractor import LangChainExtractor
+from cog_analyst.ingestion.interfaces import (
+    ExtractionError,
+    StructuredExtractor,
+    TSchema,
+)
 from cog_analyst.ingestion.pipeline import (
     IngestionPipeline,
     IngestionResult,
@@ -15,8 +16,10 @@ from cog_analyst.ingestion.pipeline import (
 __all__ = [
     "EntityGuardViolation",
     "EntityRegistry",
-    "LangChainExtractor",
     "StructuredExtractor",
+    "ExtractionError",
+    "TSchema",
+    "LangChainExtractor",
     "IngestionPipeline",
     "IngestionResult",
     "IngestStatus",
