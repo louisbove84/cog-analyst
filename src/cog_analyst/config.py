@@ -48,7 +48,9 @@ def _load_dotenv() -> None:
 _load_dotenv()
 
 # Neutral default DB; domains/scripts may point at their own dataset file.
-DEFAULT_DB_PATH = Path(os.environ.get("COG_ANALYST_DB", str(DATA_DIR / "cog_analyst.db")))
+DEFAULT_DB_PATH = Path(
+    os.environ.get("COG_ANALYST_DB", str(DATA_DIR / "cog_analyst.db"))
+)
 
 # --- LLM backend presets ----------------------------------------------------
 OLLAMA_BASE_URL = "http://localhost:11434/v1"  # Ollama's OpenAI-compatible API

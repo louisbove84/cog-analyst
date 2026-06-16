@@ -108,7 +108,8 @@ def insert_weapon(conn: sqlite3.Connection, weapon: WeaponSpecification) -> str:
     try:
         conn.execute(
             """
-            INSERT INTO weapon_specifications (designator, max_range_km, source_citation)
+            INSERT INTO weapon_specifications
+                (designator, max_range_km, source_citation)
             VALUES (?, ?, ?)
             ON CONFLICT(designator) DO UPDATE SET
                 max_range_km = excluded.max_range_km,
@@ -128,7 +129,8 @@ def insert_aircraft(conn: sqlite3.Connection, aircraft: AircraftSpecification) -
     try:
         conn.execute(
             """
-            INSERT INTO aircraft_specifications (designator, combat_radius_km, source_citation)
+            INSERT INTO aircraft_specifications
+                (designator, combat_radius_km, source_citation)
             VALUES (?, ?, ?)
             ON CONFLICT(designator) DO UPDATE SET
                 combat_radius_km = excluded.combat_radius_km,
@@ -148,7 +150,8 @@ def insert_radar(conn: sqlite3.Connection, radar: RadarSpecification) -> str:
     try:
         conn.execute(
             """
-            INSERT INTO radar_specifications (designator, max_detection_range_km, source_citation)
+            INSERT INTO radar_specifications
+                (designator, max_detection_range_km, source_citation)
             VALUES (?, ?, ?)
             ON CONFLICT(designator) DO UPDATE SET
                 max_detection_range_km = excluded.max_detection_range_km,
@@ -173,7 +176,8 @@ def insert_outpost(conn: sqlite3.Connection, outpost: OutpostInfrastructure) -> 
     try:
         conn.execute(
             """
-            INSERT INTO outpost_infrastructure (reef_name, runway_length_meters, fighter_hangar_count)
+            INSERT INTO outpost_infrastructure
+                (reef_name, runway_length_meters, fighter_hangar_count)
             VALUES (?, ?, ?)
             ON CONFLICT(reef_name) DO UPDATE SET
                 runway_length_meters = excluded.runway_length_meters,

@@ -120,7 +120,10 @@ def category_breakdown(
     Optionally restrict to one origin. Useful for "what is this corpus made of"
     questions (e.g. UAVs vs fighters vs missiles), ordered most common first.
     """
-    sql = f"SELECT json_extract(dynamic_payload, '{_DOMAIN_PATH}') AS domain FROM weg_assets"
+    sql = (
+        f"SELECT json_extract(dynamic_payload, '{_DOMAIN_PATH}') AS domain "
+        "FROM weg_assets"
+    )
     params: List[Any] = []
     if origin:
         sql += f" WHERE LOWER(json_extract(dynamic_payload, '{_ORIGIN_PATH}')) LIKE ?"

@@ -8,25 +8,28 @@ from cog_analyst.domains.spratly import MASTER_REEFS, REEF_REGISTRY
 from cog_analyst.ingestion.entity_guard import EntityGuardViolation, EntityRegistry
 
 
+# TLDR: Every reef on the allowlist passes the guard unchanged.
 @pytest.mark.parametrize("reef", MASTER_REEFS)
 def test_all_master_reefs_pass(reef):
     assert REEF_REGISTRY.is_known(reef) is True
     assert REEF_REGISTRY.enforce(reef) == reef
 
 
+# TLDR: Surrounding whitespace is trimmed before matching the allowlist.
 def test_whitespace_tolerated():
     assert REEF_REGISTRY.enforce("  Subi Reef  ") == "Subi Reef"
 
 
+# TLDR: Anything not exactly on the allowlist (wrong case, empty, made-up) is blocked.
 @pytest.mark.parametrize(
     "bad",
     [
-        "Woody Island",          # real place, but not a Spratly master reef
-        "Scarborough Shoal",     # not in registry
-        "fiery cross reef",      # wrong casing -> blocked by design
-        "Fiery Cross",           # missing 'Reef'
-        "Atlantis Reef",         # hallucinated
-        "",                      # empty
+        "Woody Island",  # real place, but not a Spratly master reef
+        "Scarborough Shoal",  # not in registry
+        "fiery cross reef",  # wrong casing -> blocked by design
+        "Fiery Cross",  # missing 'Reef'
+        "Atlantis Reef",  # hallucinated
+        "",  # empty
     ],
 )
 def test_unknown_names_blocked(bad):
@@ -35,6 +38,7 @@ def test_unknown_names_blocked(bad):
         REEF_REGISTRY.enforce(bad)
 
 
+# TLDR: A blocked value raises an error that names the offending field and value.
 def test_violation_carries_field_and_value():
     with pytest.raises(EntityGuardViolation) as excinfo:
         REEF_REGISTRY.enforce("Atlantis Reef")
@@ -42,13 +46,17 @@ def test_violation_carries_field_and_value():
     assert excinfo.value.value == "Atlantis Reef"
 
 
+# TLDR: Blocking a hallucinated value also emits an ERROR log for observability.
 def test_violation_is_logged(caplog):
     with caplog.at_level(logging.ERROR, logger="cog_analyst.entity_guard"):
         with pytest.raises(EntityGuardViolation):
             REEF_REGISTRY.enforce("Hallucinated Reef")
-    assert any("Blocked hallucinated/unknown reef_name" in r.message for r in caplog.records)
+    assert any(
+        "Blocked hallucinated/unknown reef_name" in r.message for r in caplog.records
+    )
 
 
+# TLDR: The guard is generic - a fresh registry protects any field/allowlist.
 def test_registry_is_reusable_for_other_domains():
     """The mechanism is generic: a fresh registry guards any field/allowlist."""
     ships = EntityRegistry(field="shipyard", allowed=["Jiangnan", "Dalian"])

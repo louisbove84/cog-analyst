@@ -1,0 +1,45 @@
+---
+description: Tooling, formatting, type-checking, logging, and CI standards
+globs: "{src/**/*.py,scripts/**/*.py,tests/**/*.py}"
+alwaysApply: false
+---
+# Engineering Standards
+
+## Toolchain (all configured in pyproject.toml)
+- **Ruff** = lint + format (Black-compatible). `line-length = 88`, `target = py39`.
+- **mypy** = static types (over `src/` and `scripts/`).
+- **pytest** = tests (offline; see `tests.mdc`).
+- Install with `pip install -e ".[dev,llm,pdf]"`.
+
+## Before every commit
+```bash
+ruff format .          # auto-format
+ruff check . --fix     # lint + autofix
+mypy                   # type-check
+pytest                 # tests
+```
+Or install the hooks once: `pre-commit install` (config in `.pre-commit-config.yaml`).
+
+## Type hints
+- Annotate every public function's params and returns.
+- `from __future__ import annotations` at the top of modules.
+- Python 3.9 target: use `Optional[X]` / `List[X]` from `typing`, not `X | None`.
+- Use `TypeVar` for generics (e.g. `TSchema`); keep contracts as **ABCs**.
+
+## Logging (do not use print() in `src/`)
+- Module logger: `logger = logging.getLogger("cog_analyst.<module>")`.
+- Library code (`src/`) logs; it never calls `logging.basicConfig`.
+- Only entry points (`scripts/`) configure handlers via `logging.basicConfig`.
+- Levels: `debug` tracing, `info` milestones (counts, inserts), `warning`
+  recoverable issues (validation failures), `error` blocked/failed operations.
+- Use lazy `%`-style args: `logger.info("parsed %d assets", n)` — not f-strings.
+- `print()` is fine in `scripts/` for user-facing CLI output only.
+
+## CI (.github/workflows/ci.yml)
+- Runs on push to `main` and all PRs, across Python 3.9 and 3.12.
+- Gates: `ruff check` → `ruff format --check` → `mypy` → `pytest`. Keep all green.
+
+## Errors
+- Raise specific, custom exceptions (`ExtractionError`, `EntityGuardViolation`).
+- Catch narrowly; if catching broadly, log with context and re-map to a status.
+- Never swallow exceptions silently.

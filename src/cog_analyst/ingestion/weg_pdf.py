@@ -23,9 +23,10 @@ import json
 import logging
 import re
 from collections import OrderedDict
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 logger = logging.getLogger("cog_analyst.weg_pdf")
 
@@ -88,7 +89,9 @@ def _iter_lines(doc) -> Iterator[Line]:
                 if not text:
                     continue
                 dominant = max(spans, key=lambda s: s["size"])
-                yield Line(text=text, size=round(dominant["size"], 1), font=dominant["font"])
+                yield Line(
+                    text=text, size=round(dominant["size"], 1), font=dominant["font"]
+                )
 
 
 def _is_noise(line: Line) -> bool:
@@ -157,7 +160,7 @@ class _AssetBuilder:
     def __init__(self, title: str) -> None:
         self.title = title
         self.header: Dict[str, Any] = {}
-        self.sections: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
+        self.sections: OrderedDict[str, Dict[str, Any]] = OrderedDict()
         self._section: Optional[str] = None
         self._subsection: Optional[str] = None
         self.has_content = False

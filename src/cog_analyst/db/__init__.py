@@ -15,14 +15,6 @@ from cog_analyst.db.document_store import (
     initialize_document_store,
     upsert_asset,
 )
-from cog_analyst.db.weg_queries import (
-    AssetHit,
-    category_breakdown,
-    get_asset_section,
-    get_asset_sections,
-    list_origins,
-    search_assets,
-)
 from cog_analyst.db.queries import (
     ALL_TABLES,
     counts,
@@ -33,6 +25,14 @@ from cog_analyst.db.queries import (
     get_outpost_weapons,
     get_radar,
     get_weapon,
+)
+from cog_analyst.db.weg_queries import (
+    AssetHit,
+    category_breakdown,
+    get_asset_section,
+    get_asset_sections,
+    list_origins,
+    search_assets,
 )
 
 __all__ = [

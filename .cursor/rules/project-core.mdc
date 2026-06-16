@@ -1,0 +1,47 @@
+---
+description: Core architecture, grounding philosophy, and conventions for cog-analyst
+alwaysApply: true
+---
+# cog-analyst — Core Principles
+
+## Mission
+Grounded military OSINT ingestion. **Primary goal: eliminate hallucination.**
+Persisted facts and answers must trace to deterministic sources or validated,
+cited extraction. Project focus: **Chinese air power / A2AD** (air-domain corpus).
+
+## Source of truth
+- `data/weg.db` (WEG hybrid document store) is the **canonical catalog**.
+- The ODIN WEG PDF is parsed **deterministically** — no LLM in that path.
+- Default ingest is China-only (`--origin China`; `--all-origins` to override).
+
+## Two ingestion paths (keep them separate)
+1. **WEG pipeline** (`ingestion/weg_pdf.py` → `db/document_store.py`): typography
+   scraper → UPSERT by `asset_title` → nested `dynamic_payload` JSON.
+2. **LLM Spratly slice** (`ingestion/pipeline.py` + `domains/spratly/`): untrusted
+   extractor → Pydantic validate → raw persist. Reconcile to WEG later via
+   normalize + exact match (+ small alias table). **No fuzzy/embedding matching.**
+
+## Layer boundaries
+- **Engine** (`ingestion/`, `models/`, `db/`): domain-agnostic.
+- **Domain pack** (`domains/spratly/`): registry, demo snippets, citations only.
+- **Scripts** (`scripts/`): thin CLIs wiring engine + domain; never inside `src/`.
+
+## Conventions
+- Contracts use **ABC**, not `Protocol` (`ingestion/interfaces.py`); use `TypeVar`.
+- Persistence is **pure functions over `sqlite3.Connection`** — no ORM, no god-object
+  store. All SQL parameterized; reads (`queries.py`, `weg_queries.py`) separate from
+  writes (`database.py`, `document_store.py`).
+- Pydantic schemas: `extra="forbid"`, strip whitespace, non-negative numerics,
+  required `source_citation`.
+- snake_case funcs/vars, PascalCase classes, type hints, Google-style docstrings.
+- Lazy-import optional deps (LangChain, PyMuPDF) so tests run offline.
+
+## Do not reintroduce
+- Scrubber / similarity resolver / sentence-transformers dedup.
+- Vector stores or embeddings.
+- `Protocol`-based contracts, ORMs, or a web/Flask layer.
+
+## Hygiene
+- Never commit `.env`, `data/*.db`, `rag_docs/*.pdf`, or `*.log`.
+- Regenerate DBs via `scripts/ingest_weg.py`; don't hand-edit SQLite.
+- Don't commit unless asked.

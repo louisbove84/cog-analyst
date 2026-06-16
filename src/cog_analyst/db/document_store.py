@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 if TYPE_CHECKING:
     from cog_analyst.ingestion.weg_pdf import AssetRecord
@@ -44,7 +44,7 @@ def initialize_document_store(conn: sqlite3.Connection) -> None:
         raise
 
 
-def upsert_asset(conn: sqlite3.Connection, record: "AssetRecord") -> str:
+def upsert_asset(conn: sqlite3.Connection, record: AssetRecord) -> str:
     """Insert or update one asset by title; returns the asset title.
 
     The UNIQUE primary key on ``asset_title`` means a re-ingest overwrites the

@@ -30,7 +30,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple, Type
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC = REPO_ROOT / "src"
@@ -47,11 +47,13 @@ from cog_analyst.domains.spratly import (  # noqa: E402
     OutpostInfrastructure,
 )
 from cog_analyst.ingestion import IngestionPipeline, LangChainExtractor  # noqa: E402
+from cog_analyst.ingestion.pipeline import PersistFn  # noqa: E402
 from cog_analyst.models import (  # noqa: E402
     AircraftSpecification,
     RadarSpecification,
     WeaponSpecification,
 )
+from cog_analyst.models.schemas import CogBaseModel  # noqa: E402
 
 
 def _load_snippets(path: Path) -> Dict[str, List[str]]:
@@ -81,7 +83,9 @@ def main(argv=None) -> int:
         default=None,
         help="OpenAI-compatible endpoint (e.g. LM Studio/vLLM). Overrides --backend.",
     )
-    parser.add_argument("--api-key", default=None, help="API key (ignored by local servers).")
+    parser.add_argument(
+        "--api-key", default=None, help="API key (ignored by local servers)."
+    )
     parser.add_argument(
         "--structured-method",
         default=None,
@@ -90,7 +94,9 @@ def main(argv=None) -> int:
     )
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(levelname)s %(name)s: %(message)s"
+    )
 
     settings = config.resolve_llm_settings(
         backend=args.backend,
@@ -127,11 +133,19 @@ def main(argv=None) -> int:
     conn = db.connect(db_path)
     db.initialize_database(conn)
     try:
-        jobs = [
+        jobs: List[Tuple[str, Type[CogBaseModel], PersistFn]] = [
             ("weapons", WeaponSpecification, functools.partial(db.insert_weapon, conn)),
-            ("aircraft", AircraftSpecification, functools.partial(db.insert_aircraft, conn)),
+            (
+                "aircraft",
+                AircraftSpecification,
+                functools.partial(db.insert_aircraft, conn),
+            ),
             ("radar", RadarSpecification, functools.partial(db.insert_radar, conn)),
-            ("outposts", OutpostInfrastructure, functools.partial(db.insert_outpost, conn)),
+            (
+                "outposts",
+                OutpostInfrastructure,
+                functools.partial(db.insert_outpost, conn),
+            ),
         ]
         results = []
         for key, schema, persist in jobs:

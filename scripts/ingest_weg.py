@@ -14,7 +14,8 @@ Usage:
     python scripts/ingest_weg.py --limit 25
 
     # Custom paths:
-    python scripts/ingest_weg.py --pdf rag_docs/fullwegexportcompressed.pdf --db data/weg.db
+    python scripts/ingest_weg.py \
+        --pdf rag_docs/fullwegexportcompressed.pdf --db data/weg.db
 
 Parsing is fully deterministic (no LLM): a stateful typography scraper turns each
 asset into a relational core (title + notes + source_url) plus a dynamic JSON
@@ -58,18 +59,29 @@ def _origin_matches(record: AssetRecord, needle: str) -> bool:
     but whose name still identifies the country (e.g. '... Chinese ...').
     """
     needle = needle.casefold()
-    return needle in _origin_text(record).casefold() or needle in record.asset_title.casefold()
+    return (
+        needle in _origin_text(record).casefold()
+        or needle in record.asset_title.casefold()
+    )
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Ingest the WEG export PDF into SQLite.")
-    parser.add_argument("--pdf", type=Path, default=DEFAULT_PDF, help="Source PDF path.")
-    parser.add_argument("--db", type=Path, default=DEFAULT_DB, help="Target SQLite DB path.")
-    parser.add_argument("--limit", type=int, default=None, help="Stop after N kept assets.")
+    parser = argparse.ArgumentParser(
+        description="Ingest the WEG export PDF into SQLite."
+    )
+    parser.add_argument(
+        "--pdf", type=Path, default=DEFAULT_PDF, help="Source PDF path."
+    )
+    parser.add_argument(
+        "--db", type=Path, default=DEFAULT_DB, help="Target SQLite DB path."
+    )
+    parser.add_argument(
+        "--limit", type=int, default=None, help="Stop after N kept assets."
+    )
     parser.add_argument(
         "--origin",
         default=DEFAULT_ORIGIN,
-        help="Keep only assets whose Metadata.Origin/title contains this (default: China).",
+        help="Keep assets whose origin/title contains this (default: China).",
     )
     parser.add_argument(
         "--all-origins",
@@ -81,7 +93,9 @@ def main(argv=None) -> int:
     )
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(levelname)s %(name)s: %(message)s"
+    )
 
     if not args.pdf.exists():
         parser.error(f"PDF not found: {args.pdf}")

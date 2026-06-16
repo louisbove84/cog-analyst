@@ -9,6 +9,7 @@ from cog_analyst.models import (
 )
 
 
+# TLDR: Re-running initialize_database() doesn't wipe or duplicate data.
 def test_init_is_idempotent(conn):
     before = db.counts(conn)
     db.initialize_database(conn)
@@ -16,35 +17,53 @@ def test_init_is_idempotent(conn):
     assert db.counts(conn) == before
 
 
+# TLDR: Numeric columns are declared INTEGER, so SQLite enforces the type.
 def test_strict_integer_columns(conn):
-    assert db.get_column_type(conn, "weapon_specifications", "max_range_km") == "INTEGER"
-    assert db.get_column_type(conn, "outpost_infrastructure", "runway_length_meters") == "INTEGER"
-    assert db.get_column_type(conn, "aircraft_specifications", "combat_radius_km") == "INTEGER"
+    assert (
+        db.get_column_type(conn, "weapon_specifications", "max_range_km") == "INTEGER"
+    )
+    assert (
+        db.get_column_type(conn, "outpost_infrastructure", "runway_length_meters")
+        == "INTEGER"
+    )
+    assert (
+        db.get_column_type(conn, "aircraft_specifications", "combat_radius_km")
+        == "INTEGER"
+    )
 
 
+# TLDR: A weapon round-trips: what we insert is what we read back.
 def test_insert_and_read_weapon(conn):
     db.insert_weapon(
         conn,
-        WeaponSpecification(designator="YJ-12", max_range_km=290, source_citation="Dahm p.18"),
+        WeaponSpecification(
+            designator="YJ-12", max_range_km=290, source_citation="Dahm p.18"
+        ),
     )
     got = db.get_weapon(conn, "YJ-12")
     assert got is not None
     assert got.max_range_km == 290
 
 
+# TLDR: Aircraft and radar catalogs insert and read back correctly.
 def test_insert_and_read_aircraft_and_radar(conn):
     db.insert_aircraft(
         conn,
-        AircraftSpecification(designator="J-11", combat_radius_km=1500, source_citation="Dahm"),
+        AircraftSpecification(
+            designator="J-11", combat_radius_km=1500, source_citation="Dahm"
+        ),
     )
     db.insert_radar(
         conn,
-        RadarSpecification(designator="Type 305A", max_detection_range_km=400, source_citation="Dahm"),
+        RadarSpecification(
+            designator="Type 305A", max_detection_range_km=400, source_citation="Dahm"
+        ),
     )
     assert db.get_aircraft(conn, "J-11").combat_radius_km == 1500
     assert db.get_radar(conn, "Type 305A").max_detection_range_km == 400
 
 
+# TLDR: An outpost links to its weapons, aircraft, and radar (hub-and-spoke).
 def test_insert_outpost_links_all_capabilities(conn):
     db.insert_outpost(
         conn,
@@ -63,6 +82,7 @@ def test_insert_outpost_links_all_capabilities(conn):
     assert db.get_outpost_radar(conn, "Fiery Cross Reef") == ["Type 305A"]
 
 
+# TLDR: The write path is raw - unknown reefs and alias designators are stored as-is.
 def test_outpost_keeps_raw_aliases(conn):
     """The write path is raw: no guard, no dedup (reconciliation is downstream)."""
     db.insert_outpost(
@@ -76,17 +96,25 @@ def test_outpost_keeps_raw_aliases(conn):
     assert db.get_outpost_weapons(conn, "Atlantis Reef") == ["HQ-9B", "HQ-9B SAMs"]
 
 
+# TLDR: Re-inserting the same designator updates the row instead of duplicating it.
 def test_weapon_upsert_updates_in_place(conn):
     db.insert_weapon(
-        conn, WeaponSpecification(designator="HQ-9B", max_range_km=200, source_citation="old")
+        conn,
+        WeaponSpecification(
+            designator="HQ-9B", max_range_km=200, source_citation="old"
+        ),
     )
     db.insert_weapon(
-        conn, WeaponSpecification(designator="HQ-9B", max_range_km=300, source_citation="Dahm p.6")
+        conn,
+        WeaponSpecification(
+            designator="HQ-9B", max_range_km=300, source_citation="Dahm p.6"
+        ),
     )
     assert db.counts(conn)["weapon_specifications"] == 1
     assert db.get_weapon(conn, "HQ-9B").max_range_km == 300
 
 
+# TLDR: Listing the same weapon twice on an outpost yields a single link row.
 def test_duplicate_outpost_link_is_ignored(conn):
     o = OutpostInfrastructure(
         reef_name="Subi Reef", verified_deployed_weapons=["HQ-9B", "HQ-9B"]

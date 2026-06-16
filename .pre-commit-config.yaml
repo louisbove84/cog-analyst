@@ -1,0 +1,24 @@
+# Run locally with: pre-commit install  (then it runs on every git commit)
+# Or one-off across the repo: pre-commit run --all-files
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff           # lint
+        args: [--fix]
+      - id: ruff-format    # format (Black-compatible)
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        files: ^(src|scripts)/
+        additional_dependencies: ["pydantic>=2"]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-added-large-files

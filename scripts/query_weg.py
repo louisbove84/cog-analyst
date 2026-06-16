@@ -18,7 +18,8 @@ Examples:
 
     # What sections does one asset have, then fetch one of them?
     python scripts/query_weg.py sections "J-20 Chinese Multirole Fighter Aircraft"
-    python scripts/query_weg.py section "J-20 Chinese Multirole Fighter Aircraft" ARMAMENT
+    python scripts/query_weg.py \
+        section "J-20 Chinese Multirole Fighter Aircraft" ARMAMENT
 """
 
 from __future__ import annotations
@@ -56,12 +57,20 @@ def main(argv=None) -> int:
 
     sub.add_parser("origins", help="List origins and their asset counts.")
 
-    p_break = sub.add_parser("breakdown", help="Category breakdown (optionally by origin).")
-    p_break.add_argument("--origin", default=None, help="Restrict to one origin substring.")
+    p_break = sub.add_parser(
+        "breakdown", help="Category breakdown (optionally by origin)."
+    )
+    p_break.add_argument(
+        "--origin", default=None, help="Restrict to one origin substring."
+    )
 
     p_search = sub.add_parser("search", help="Search assets by origin/domain/name.")
-    p_search.add_argument("--origin", default=None, help="Origin substring (e.g. China).")
-    p_search.add_argument("--domain", default=None, help="Domain substring (e.g. UAV, Fighter).")
+    p_search.add_argument(
+        "--origin", default=None, help="Origin substring (e.g. China)."
+    )
+    p_search.add_argument(
+        "--domain", default=None, help="Domain substring (e.g. UAV, Fighter)."
+    )
     p_search.add_argument("--name", default=None, help="Title substring.")
     p_search.add_argument("--limit", type=int, default=50, help="Max results.")
 

@@ -71,7 +71,9 @@ def get_column_type(conn: sqlite3.Connection, table: str, column: str) -> Option
     return None
 
 
-def get_weapon(conn: sqlite3.Connection, designator: str) -> Optional[WeaponSpecification]:
+def get_weapon(
+    conn: sqlite3.Connection, designator: str
+) -> Optional[WeaponSpecification]:
     row = conn.execute(
         "SELECT designator, max_range_km, source_citation "
         "FROM weapon_specifications WHERE designator = ?",
@@ -86,7 +88,9 @@ def get_weapon(conn: sqlite3.Connection, designator: str) -> Optional[WeaponSpec
     )
 
 
-def get_aircraft(conn: sqlite3.Connection, designator: str) -> Optional[AircraftSpecification]:
+def get_aircraft(
+    conn: sqlite3.Connection, designator: str
+) -> Optional[AircraftSpecification]:
     row = conn.execute(
         "SELECT designator, combat_radius_km, source_citation "
         "FROM aircraft_specifications WHERE designator = ?",
@@ -101,7 +105,9 @@ def get_aircraft(conn: sqlite3.Connection, designator: str) -> Optional[Aircraft
     )
 
 
-def get_radar(conn: sqlite3.Connection, designator: str) -> Optional[RadarSpecification]:
+def get_radar(
+    conn: sqlite3.Connection, designator: str
+) -> Optional[RadarSpecification]:
     row = conn.execute(
         "SELECT designator, max_detection_range_km, source_citation "
         "FROM radar_specifications WHERE designator = ?",
@@ -116,7 +122,9 @@ def get_radar(conn: sqlite3.Connection, designator: str) -> Optional[RadarSpecif
     )
 
 
-def _linked_designators(conn: sqlite3.Connection, table: str, reef_name: str) -> List[str]:
+def _linked_designators(
+    conn: sqlite3.Connection, table: str, reef_name: str
+) -> List[str]:
     column = _LINK_COLUMNS[table]
     rows = conn.execute(
         f"SELECT {column} AS designator FROM {table} "

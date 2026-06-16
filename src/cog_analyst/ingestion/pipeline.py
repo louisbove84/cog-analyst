@@ -14,20 +14,19 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Optional, Type, TypeVar
+from typing import Any, Callable, Optional, Type
 
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from cog_analyst.ingestion.entity_guard import EntityGuardViolation
 from cog_analyst.ingestion.interfaces import ExtractionError, StructuredExtractor
+from cog_analyst.models.schemas import CogBaseModel
 
 logger = logging.getLogger("cog_analyst.pipeline")
 
-TSchema = TypeVar("TSchema", bound=BaseModel)
-
 # A persist function takes a validated model and returns its identifier (e.g.
 # the designator or reef name).
-PersistFn = Callable[[BaseModel], str]
+PersistFn = Callable[[Any], str]
 
 
 class IngestStatus(str, Enum):
@@ -59,7 +58,7 @@ class IngestionPipeline:
     def ingest(
         self,
         text: str,
-        schema: Type[TSchema],
+        schema: Type[CogBaseModel],
         persist: PersistFn,
     ) -> IngestionResult:
         """Extract ``text`` into ``schema``, then persist it via ``persist``.

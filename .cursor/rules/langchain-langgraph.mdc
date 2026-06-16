@@ -1,0 +1,42 @@
+---
+description: Concise LangChain/LangGraph practices for this project (LLM extraction + future agent layer)
+globs: src/**/*.py
+alwaysApply: false
+---
+# LangChain / LangGraph Practices
+
+Applies when writing LLM-extraction or agent-orchestration code. Where this rule
+and `project-core.mdc` overlap, follow `project-core.mdc`.
+
+## Grounding first
+- Treat the LLM as an **untrusted extractor**: its output must pass Pydantic
+  validation before it is persisted or used. Never trust raw model text.
+- Ground answers in retrieved/stored data and cite the source (`source_url`).
+- Do **not** add vector stores / embeddings. Reconcile against `data/weg.db`
+  with deterministic JSON1 + exact-match (small alias table if needed).
+
+## Structure
+- Keep nodes/chains small and single-purpose; compose them, don't build monoliths.
+- Define contracts with ABCs (e.g. `StructuredExtractor`) and inject dependencies
+  so tests can substitute fakes.
+- Lazy-import `langchain_*` / `langgraph` inside functions so the test suite runs
+  offline without those optional extras installed.
+
+## Extraction
+- Use `.with_structured_output(Schema)` against the OpenAI-compatible client.
+- Resolve model/base_url/api_key via `config.resolve_llm_settings` (CLI > env > default).
+- Raise `ExtractionError` for transport/client failures; let the pipeline map each
+  failure to an explicit `IngestStatus` instead of crashing the batch.
+
+## State & control flow (LangGraph)
+- Use an explicit, typed state schema; prefer immutable updates.
+- Use conditional edges with clear termination — guard against infinite loops.
+- Add retry with backoff only for transient errors (timeouts, rate limits).
+
+## Security
+- Never hardcode API keys; read from `.env` / env vars only.
+- Validate and sanitize any external/user input before it reaches a prompt.
+
+## Testing
+- Pipeline/agent tests run offline: inject a fake extractor/mocked tools.
+- Cover the failure paths (validation error, extraction error), not just happy paths.

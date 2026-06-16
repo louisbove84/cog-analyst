@@ -6,9 +6,9 @@ import pytest
 
 fitz = pytest.importorskip("fitz", reason="PyMuPDF required for WEG PDF tests")
 
-from cog_analyst import db
-from cog_analyst.db import document_store
-from cog_analyst.ingestion.weg_pdf import AssetRecord, parse_document
+from cog_analyst import db  # noqa: E402
+from cog_analyst.db import document_store  # noqa: E402
+from cog_analyst.ingestion.weg_pdf import AssetRecord, parse_document  # noqa: E402
 
 
 def _make_sample_pdf(path):
@@ -23,45 +23,55 @@ def _make_sample_pdf(path):
             y += size + 8
 
     # Asset A, page 1 (title wraps across two 16pt lines).
-    page_with([
-        ("Test Alpha", 16, "tiro"),
-        ("Fighter Aircraft", 16, "tiro"),
-        ("WEG Location: https://example.mil/asset/alpha", 8, "tiro"),
-        ("Domain: Air, Fighter", 8, "tiro"),
-        ("Origin: Testland", 8, "tiro"),
-        ("Notes", 12, "tiro"),
-        ("The Test Alpha is a prototype: it flies fast.", 8, "tiro"),
-        ("System", 12, "tiro"),
-        ("Ceiling (m): 16765", 8, "tiro"),
-        ("Date of Introduction", 9.4, "tiro"),
-        ("M: 2001", 8, "tiro"),
-        ("For Training Use Only", 11.2, "tiro"),
-        ("Exported (UTC) @ 6/13/26, 6:38 AM", 11.2, "tiro"),
-        ("1", 12, "helv"),
-    ])
+    page_with(
+        [
+            ("Test Alpha", 16, "tiro"),
+            ("Fighter Aircraft", 16, "tiro"),
+            ("WEG Location: https://example.mil/asset/alpha", 8, "tiro"),
+            ("Domain: Air, Fighter", 8, "tiro"),
+            ("Origin: Testland", 8, "tiro"),
+            ("Notes", 12, "tiro"),
+            ("The Test Alpha is a prototype: it flies fast.", 8, "tiro"),
+            ("System", 12, "tiro"),
+            ("Ceiling (m): 16765", 8, "tiro"),
+            ("Date of Introduction", 9.4, "tiro"),
+            ("M: 2001", 8, "tiro"),
+            ("For Training Use Only", 11.2, "tiro"),
+            ("Exported (UTC) @ 6/13/26, 6:38 AM", 11.2, "tiro"),
+            ("1", 12, "helv"),
+        ]
+    )
     # Asset A, page 2 (section continues across the page break).
-    page_with([
-        ("Speed (km/h)", 9.4, "tiro"),
-        ("Maximum: 2390", 8, "tiro"),
-        ("Engines", 9.4, "tiro"),
-        # Long, sentence-like label must still be captured as key/value.
-        ("19,955 lbs. thrust SNECMA M-88-3 turbofans with afterburner: 2", 8, "tiro"),
-        ("ARMAMENT", 12, "tiro"),
-        ("Cannon: 1", 8, "tiro"),
-        ("For Training Use Only", 11.2, "tiro"),
-        ("2", 12, "helv"),
-    ])
+    page_with(
+        [
+            ("Speed (km/h)", 9.4, "tiro"),
+            ("Maximum: 2390", 8, "tiro"),
+            ("Engines", 9.4, "tiro"),
+            # Long, sentence-like label must still be captured as key/value.
+            (
+                "19,955 lbs. thrust SNECMA M-88-3 turbofans with afterburner: 2",
+                8,
+                "tiro",
+            ),
+            ("ARMAMENT", 12, "tiro"),
+            ("Cannon: 1", 8, "tiro"),
+            ("For Training Use Only", 11.2, "tiro"),
+            ("2", 12, "helv"),
+        ]
+    )
     # Asset B, page 3.
-    page_with([
-        ("Test Bravo Missile", 16, "tiro"),
-        ("WEG Location: https://example.mil/asset/bravo", 8, "tiro"),
-        ("Notes", 12, "tiro"),
-        ("Bravo is a missile.", 8, "tiro"),
-        ("System", 12, "tiro"),
-        ("Range (km): 300", 8, "tiro"),
-        ("For Training Use Only", 11.2, "tiro"),
-        ("3", 12, "helv"),
-    ])
+    page_with(
+        [
+            ("Test Bravo Missile", 16, "tiro"),
+            ("WEG Location: https://example.mil/asset/bravo", 8, "tiro"),
+            ("Notes", 12, "tiro"),
+            ("Bravo is a missile.", 8, "tiro"),
+            ("System", 12, "tiro"),
+            ("Range (km): 300", 8, "tiro"),
+            ("For Training Use Only", 11.2, "tiro"),
+            ("3", 12, "helv"),
+        ]
+    )
 
     doc.save(str(path))
     doc.close()
@@ -74,6 +84,7 @@ def sample_pdf(tmp_path):
     return path
 
 
+# TLDR: The scraper finds both assets and merges a title that wraps across two lines.
 def test_parses_two_assets(sample_pdf):
     records = list(parse_document(sample_pdf))
     assert [r.asset_title for r in records] == [
@@ -82,12 +93,14 @@ def test_parses_two_assets(sample_pdf):
     ]
 
 
+# TLDR: The URL is promoted to source_url and Notes prose is routed to the notes column.
 def test_relational_core_fields(sample_pdf):
     a = list(parse_document(sample_pdf))[0]
     assert a.source_url == "https://example.mil/asset/alpha"
     assert "prototype" in a.notes  # Notes prose routed to the notes column
 
 
+# TLDR: Payload nests by section/sub-section and parses "Label: value" into KV pairs.
 def test_dynamic_payload_structure_and_kv(sample_pdf):
     a = list(parse_document(sample_pdf))[0]
     payload = a.payload
@@ -105,6 +118,7 @@ def test_dynamic_payload_structure_and_kv(sample_pdf):
     assert "Notes" not in payload
 
 
+# TLDR: Even a long, sentence-like label is kept as a key/value pair.
 def test_long_label_kept_as_key_value(sample_pdf):
     a = list(parse_document(sample_pdf))[0]
     engines = a.payload["System"]["Engines"]
@@ -113,18 +127,21 @@ def test_long_label_kept_as_key_value(sample_pdf):
     }
 
 
+# TLDR: Repeating page noise (banners, export stamps, page numbers) is filtered out.
 def test_page_furniture_is_discarded(sample_pdf):
     blob = json.dumps([r.payload for r in parse_document(sample_pdf)])
     assert "For Training Use Only" not in blob
     assert "Exported (UTC)" not in blob
 
 
+# TLDR: The limit argument stops parsing after N assets (for sampling huge files).
 def test_limit_stops_early(sample_pdf):
     records = list(parse_document(sample_pdf, limit=1))
     assert len(records) == 1
     assert records[0].asset_title == "Test Alpha Fighter Aircraft"
 
 
+# TLDR: Assets round-trip; re-ingesting a title updates rather than duplicates.
 def test_upsert_round_trip_and_dedupe(tmp_path, sample_pdf):
     conn = db.connect(tmp_path / "weg.db")
     document_store.initialize_document_store(conn)

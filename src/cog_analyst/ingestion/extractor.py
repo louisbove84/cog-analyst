@@ -8,7 +8,7 @@ dependencies installed.
 
 from __future__ import annotations
 
-from typing import Optional, Type
+from typing import Any, Dict, Optional, Type, cast
 
 from cog_analyst.ingestion.interfaces import (
     ExtractionError,
@@ -56,7 +56,7 @@ class LangChainExtractor(StructuredExtractor):
 
         self._structured_output_method = structured_output_method
 
-        kwargs = {
+        kwargs: Dict[str, Any] = {
             "model": model,
             "temperature": temperature,
         }
@@ -82,7 +82,7 @@ class LangChainExtractor(StructuredExtractor):
         try:
             if self._structured_output_method is not None:
                 structured = self._llm.with_structured_output(
-                    schema, method=self._structured_output_method
+                    schema, method=cast(Any, self._structured_output_method)
                 )
             else:
                 structured = self._llm.with_structured_output(schema)
@@ -92,6 +92,7 @@ class LangChainExtractor(StructuredExtractor):
 
         if not isinstance(result, schema):
             raise TypeError(
-                f"extractor returned {type(result).__name__}, expected {schema.__name__}"
+                f"extractor returned {type(result).__name__}, "
+                f"expected {schema.__name__}"
             )
         return result

@@ -24,6 +24,8 @@ pdf = [
 dev = [
     "pytest>=8",
     "pymupdf>=1.24",
+    "ruff>=0.6",
+    "mypy>=1.11",
 ]
 
 [project.scripts]
@@ -42,3 +44,24 @@ testpaths = ["tests"]
 addopts = "-v -ra"
 log_cli_format = "%(levelname)-8s %(name)s: %(message)s"
 log_cli_date_format = "%H:%M:%S"
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+src = ["src", "scripts", "tests"]
+
+[tool.ruff.lint]
+# E/W pycodestyle, F pyflakes, I import-sort, B bugbear, BLE blind-except.
+# pyupgrade (UP) is intentionally omitted: we target py39 and keep typing.Optional/
+# List style (see engineering-standards.mdc), which UP would fight.
+select = ["E", "W", "F", "I", "B", "BLE"]
+
+[tool.mypy]
+python_version = "3.9"
+files = ["src", "scripts"]
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+no_implicit_optional = true
+# Optional deps (langchain, fitz) are lazy-imported and ship no stubs.
+ignore_missing_imports = true

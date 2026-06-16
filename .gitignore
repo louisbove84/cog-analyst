@@ -24,4 +24,8 @@ rag_docs/*
 
 # OS / editor
 .DS_Store
+
+# Tooling caches
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/

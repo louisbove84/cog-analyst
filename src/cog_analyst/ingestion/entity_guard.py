@@ -13,7 +13,8 @@ downstream step (normalize + exact match against the WEG catalog), not a guess.
 from __future__ import annotations
 
 import logging
-from typing import Iterable, List
+from collections.abc import Iterable
+from typing import List
 
 logger = logging.getLogger("cog_analyst.entity_guard")
 

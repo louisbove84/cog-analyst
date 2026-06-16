@@ -28,7 +28,9 @@ class FakeExtractor(StructuredExtractor):
     def register(self, schema: Type[BaseModel], trigger: str, value: BaseModel) -> None:
         self._responses[(schema.__name__, trigger)] = value
 
-    def register_error(self, schema: Type[BaseModel], trigger: str, exc: Exception) -> None:
+    def register_error(
+        self, schema: Type[BaseModel], trigger: str, exc: Exception
+    ) -> None:
         self._errors[(schema.__name__, trigger)] = exc
 
     def extract(self, text: str, schema: Type[TSchema]) -> TSchema:
