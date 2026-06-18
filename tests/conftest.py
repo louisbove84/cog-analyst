@@ -1,58 +1,92 @@
-"""Shared test fixtures: offline DB and a fake extractor (no network needed)."""
+"""Shared test fixtures."""
 
 from __future__ import annotations
 
-from typing import Dict, Tuple, Type, TypeVar
+import hashlib
+from typing import List
 
+import numpy as np
 import pytest
-from pydantic import BaseModel
 
 from cog_analyst import db
-from cog_analyst.ingestion import StructuredExtractor
+from cog_analyst.db import document_store, join_queries, oob_store
+from cog_analyst.ingestion.designator import normalize_designator
+from cog_analyst.ingestion.oob_markdown import UnitRecord
+from cog_analyst.ingestion.weg_pdf import AssetRecord
+from cog_analyst.rag.embedder import Embedder
 
-TSchema = TypeVar("TSchema", bound=BaseModel)
 
+class FakeEmbedder(Embedder):
+    """Deterministic offline embedder: hashes tokens into a fixed-dim vector.
 
-class FakeExtractor(StructuredExtractor):
-    """Returns pre-seeded schema instances keyed by (schema, trigger substring).
-
-    Stands in for the LLM so pipeline tests are deterministic and offline while
-    honoring the real ABC contract: return an instance of the requested schema,
-    or raise to simulate an extraction failure.
+    Stands in for sentence-transformers so RAG tests run without ML deps or
+    network. Vectors are L2-normalized so dot product == cosine, matching the
+    real embedder's contract; shared tokens yield higher similarity.
     """
 
-    def __init__(self) -> None:
-        self._responses: Dict[Tuple[str, str], BaseModel] = {}
-        self._errors: Dict[Tuple[str, str], Exception] = {}
+    def __init__(self, dimension: int = 32) -> None:
+        self._dimension = dimension
 
-    def register(self, schema: Type[BaseModel], trigger: str, value: BaseModel) -> None:
-        self._responses[(schema.__name__, trigger)] = value
+    @property
+    def dimension(self) -> int:
+        return self._dimension
 
-    def register_error(
-        self, schema: Type[BaseModel], trigger: str, exc: Exception
-    ) -> None:
-        self._errors[(schema.__name__, trigger)] = exc
-
-    def extract(self, text: str, schema: Type[TSchema]) -> TSchema:
-        for (schema_name, trigger), exc in self._errors.items():
-            if schema_name == schema.__name__ and trigger in text:
-                raise exc
-        for (schema_name, trigger), value in self._responses.items():
-            if schema_name == schema.__name__ and trigger in text:
-                return value  # type: ignore[return-value]
-        raise AssertionError(
-            f"FakeExtractor: no response registered for {schema.__name__} / {text!r}"
-        )
+    def embed(self, texts: List[str]) -> np.ndarray:
+        out = np.zeros((len(texts), self._dimension), dtype=np.float32)
+        for row, text in enumerate(texts):
+            for token in text.lower().split():
+                h = int(hashlib.sha1(token.encode()).hexdigest(), 16)
+                out[row, h % self._dimension] += 1.0
+        norms = np.linalg.norm(out, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        return out / norms
 
 
 @pytest.fixture()
-def conn(tmp_path):
-    connection = db.connect(tmp_path / "test_spratly.db")
-    db.initialize_database(connection)
-    yield connection
-    connection.close()
+def fake_embedder() -> FakeEmbedder:
+    return FakeEmbedder()
 
 
 @pytest.fixture()
-def fake_extractor() -> FakeExtractor:
-    return FakeExtractor()
+def laydown_dbs(tmp_path):
+    """Minimal WEG + OOB stores joined for cross-DB query tests."""
+    weg_conn = db.connect(tmp_path / "weg.db")
+    oob_conn = db.connect(tmp_path / "oob.db")
+    document_store.initialize_document_store(weg_conn)
+    oob_store.initialize_oob_store(oob_conn)
+    document_store.upsert_asset(
+        weg_conn,
+        AssetRecord(
+            asset_title="J-20 (FAGIN) Chinese Stealth Air Superiority Fighter",
+            source_url="https://example.mil/weg/j-20",
+            notes="Test asset.",
+            payload={
+                "Metadata": {"Origin": "China", "Domain": "Air, Fighter"},
+                "System": {
+                    "Maximum Range (km)": "2000",
+                    "Ceiling (m)": "20000",
+                },
+            },
+        ),
+    )
+    oob_store.upsert_unit(
+        oob_conn,
+        UnitRecord(
+            unit_name="空9旅",
+            service="PLAAF",
+            branch=None,
+            role="fighter",
+            theater_command="Eastern",
+            location_text="安徽芜湖市湾里机场",
+            province="安徽省",
+            airbase="湾里机场",
+            tactical_code="62X0X",
+            remarks="上海基地",
+            source_url="https://example.org/oob",
+            aircraft=[normalize_designator("歼-20A")],
+        ),
+    )
+    join_queries.attach_weg(oob_conn, tmp_path / "weg.db")
+    yield oob_conn, weg_conn
+    oob_conn.close()
+    weg_conn.close()

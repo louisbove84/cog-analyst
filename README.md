@@ -1,15 +1,18 @@
-# cog-analyst — Grounded Military OSINT Ingestion Engine
+# cog-analyst — Grounded Military OSINT Analysis
 
-A grounded ingestion engine for a military OSINT analysis project. The design
-goal is **eliminating hallucination**. Two complementary ingestion paths feed a
-hybrid relational store:
+A grounded OSINT project for **Chinese air power / A2AD**. The design goal is
+**eliminating hallucination**. Two deterministic ingestion paths feed relational
+stores (ground truth); a vector store adds cited doctrinal context; a LangGraph
+agent synthesizes COG analysis only from joined, cited evidence.
 
-1. **Deterministic document ingestion (source of truth).** A typography-driven
-   PDF scraper turns a large equipment-guide export into structured records with
-   **no LLM in the loop** — the strongest possible grounding.
-2. **LLM-assisted extraction (Spratly COG slice).** Where prose must be turned
-   into typed facts, the LLM is treated as an *untrusted extractor*: every record
-   survives strict validation and a separate deterministic scrub before it counts.
+1. **WEG equipment catalog** (`data/weg.db`) — what systems can do (deterministic PDF scrape).
+2. **PLA air laydown** (`data/oob.db`) — who fields them, from where (deterministic Markdown scrape).
+3. **Doctrinal RAG** (`data/rag.db`) — embedded OSINT reports for cited context (supplementary, never authoritative).
+4. **COG agent** (`cog/graph.py`) — resolve → retrieve (join) → context (RAG) → CC → CR → CV/CoG.
+
+**Grounding hierarchy:** the structured DBs are ground truth. RAG is *context
+only* — it may explain or corroborate a finding but never selects entities or
+overrides a database fact, and every snippet is cited (`file p.N`).
 
 ## Ground truth: the WEG hybrid document store
 
@@ -68,10 +71,9 @@ python scripts/ingest_weg.py --all-origins    # keep every country (700 assets)
 sqlite3 data/weg.db "SELECT asset_title, source_url FROM weg_assets LIMIT 5;"
 ```
 
-> **Source of truth:** `data/weg.db` is the canonical catalog. The LLM pipeline
-> writes extracted records raw; reconciling designator aliases against the
-> deterministic WEG catalog (normalize + exact match, plus a small explicit alias
-> table where needed) is a deliberate, auditable step — no fuzzy embedding match.
+> **Source of truth:** `data/weg.db` is the canonical capability catalog.
+> `data/oob.db` is corroborating laydown (Wikipedia snapshot). Join them via
+> `db/join_queries.py` — never fuzzy-match designators.
 
 ### Querying the store (agent tool layer)
 
@@ -97,68 +99,183 @@ python scripts/query_weg.py sections "J-20 (FAGIN) Chinese Stealth Air Superiori
 python scripts/query_weg.py section  "J-20 (FAGIN) Chinese Stealth Air Superiority Fighter" Variants
 ```
 
-## The LLM anti-hallucination pipeline (Spratly COG slice)
+## Order of battle: the PLA air laydown store
 
-The pipeline **ingests raw**, so you can inspect exactly what the
-LLM wrote before any downstream reconciliation against ground truth.
+Equipment specs say *what a system can do*; they cannot say *who fields it or
+from where*. `data/oob.db` supplies that force-laydown layer, so a capability can
+be tied to real units, bases, and theaters — the join the COG workflow needs.
+
+`rag_docs/pla_air_oob.md` is a saved Chinese Wikipedia article (PLA Air Force /
+Naval Aviation 编制序列). It is parsed **deterministically** — no LLM — by a
+stateful Markdown table scraper (`ingestion/oob_markdown.py`):
+
+- **Heading state** carries service (`空军`→PLAAF / `海军`→PLANAF / Training),
+  role (`歼击机`→fighter, `无人机`→uav, …), and theater (`东部战区`→Eastern, …)
+  across rows, since those are section headers, not table columns.
+- **Content-based cell classification** (not column position): the source tables
+  drift (UAV/carrier rows misalign columns), so each cell is routed by what it
+  *is* — a real designator, a `[0-9X]` tactical code, a `战区` theater, or
+  geography — making the parse resilient to layout noise. The trailing
+  tail-number decoder matrix is skipped automatically.
+- **Designator crosswalk** (`ingestion/designator.py`): a fixed, ordered prefix
+  map turns Chinese designators into the Latin join key (`歼-20A`→`J-20`,
+  `轰-6K`→`H-6`, `运-8`→`Y-8`), so OOB units join `weg.db` by `en_designator`.
+  Division names that merely contain a role character (`第34运输机师`) are rejected.
 
 ```text
-INGEST (LLM → DB, as-is)
-text snippet
-   │  (1) LLM structured extraction  — LangChain .with_structured_output(Schema)
-   │  (2) Schema validation          — strict types, required citation, extra="forbid"
-   │  (3) SQLite persistence         — writes raw rows (aliases kept)
-spratly_fleet.db  ← inspect with sqlite3
+units                                   unit_aircraft
+  unit_key PRIMARY KEY                    unit_key  ──┐ FK → units (ON DELETE CASCADE)
+  unit_name / service / role             raw_designator   歼-20A   (verbatim)
+  theater_command / location_text        cn_designator    歼-20    (canonical CN base)
+  airbase / tactical_code / source_url   en_designator    J-20     (← WEG join key)
 ```
 
-Records are persisted raw. Reconciliation against ground truth (mapping a
-designator alias like `HQ-9B SAMs` onto its canonical entry) is a deliberate
-downstream step against the WEG store — normalize + exact match, with a small
-explicit alias table for the irregular leftovers. No fuzzy embedding matching,
-so a merge can never silently fuse two genuinely different systems.
+```bash
+python scripts/ingest_oob.py --md rag_docs/pla_air_oob.md   # → data/oob.db (~100 units)
+```
 
-### Hub-and-spoke data model
+`db/oob_queries.py` exposes the read surface as **agent tools**:
 
-The outpost is the hub; weapons, aircraft, and radar are reusable catalogs linked
-by designator:
+| Function | Purpose |
+|---|---|
+| `units_for_aircraft(designator)` | "Who fields type X, and from where" — the capability→laydown join |
+| `search_units(service, role, theater, location_contains)` | Set-level laydown filter |
+| `aircraft_inventory(service)` | Fielding-unit count per type (variants collapse by Latin base) |
+| `role_breakdown()` / `list_theaters()` | "What is this force made of?" discovery |
 
-- `weapon_specifications(designator PK, max_range_km, source_citation)`
-- `aircraft_specifications(designator PK, combat_radius_km, source_citation)`
-- `radar_specifications(designator PK, max_detection_range_km, source_citation)`
-- `outpost_infrastructure(reef_name PK, runway_length_meters, fighter_hangar_count)`
-- `outpost_weapons / outpost_aircraft / outpost_radar(reef_name, designator)` —
-  join tables (FK to the hub) realizing the outpost's deployed-capability lists.
+> **OSINT caveat:** the OOB source is Wikipedia (a point-in-time snapshot), not an
+> authoritative order of battle. Treat `weg.db` as higher-confidence ground truth
+> and the OOB layer as corroborating laydown; tactical codes are deliberately
+> obfuscated (`78X1X`) in the source and stored verbatim, not as precise IDs.
+
+## Capability × laydown join (agent Node 1)
+
+`db/join_queries.py` `ATTACH`es `weg.db` onto an OOB connection and joins
+`unit_aircraft.en_designator` to `weg_assets.asset_title`. One call returns unit +
+base + theater + WEG spec slice — the single grounded artifact Node 1 needs.
+
+| Function | Purpose |
+|---|---|
+| `capability_laydown(designator, theater, role, service)` | Joined unit/aircraft/WEG rows |
+| `laydown_payload_slice(asset_title, section)` | Narrow WEG section (e.g. `System`) |
+| `laydown_as_dicts(hits)` | JSON-ready rows for agent state |
+
+```bash
+python scripts/query_laydown.py --designator J-20
+python scripts/query_laydown.py --designator H-6 --role bomber
+```
+
+## Doctrinal context: the RAG vector store
+
+Specs and laydown say *what* and *where*; they cannot say *why a dependency
+matters* or *what is a known weakness*. The doctrinal PDFs in `rag_docs/` (DoD
+*China Military Power* reports, think-tank analyses) supply that. They are chunked
+with a **Parent-Child** scheme, **embedded** with Google's Gemini embeddings, and
+stored in `data/rag.db` for cosine retrieval — so the agent can pull cited
+strategic context to inform (never define) its reasoning.
+
+**Parent-Child retrieval** embeds *small* passages for precise matching but feeds
+*large* passages to the LLM for full context:
+
+```text
+rag_parents                       rag_chunks (children, embedded)
+  parent_id PK                      chunk_id PK
+  source / page                     parent_id  ── FK → rag_parents
+  text  (one full page)             source / page
+                                    text  (~150-word window)
+                                    embedding BLOB  (L2-normalized; cosine == dot)
+```
+
+1. Embed each **child** window (~150 words) → precise semantic match.
+2. Rank the top `child_pool` children, **de-duplicate onto distinct parent
+   pages**, and return at most `max_parents` of them (the context-size cap).
+3. The LLM reads the full **parent page**, cited as `file p.N`.
+
+- **Embedder is swappable** (`rag/embedder.py`, `Embedder` ABC). Default is
+  **Google `gemini-embedding-001` @ 768 dims** (`GoogleEmbedder`, needs
+  `GEMINI_API_KEY`); set `COG_EMBED_BACKEND=local` for an offline
+  sentence-transformers model instead.
+- **Asymmetric task types** — documents are embedded with `RETRIEVAL_DOCUMENT`
+  and queries with `RETRIEVAL_QUERY`, which improves retrieval quality.
+- **Retrieval knobs** (`config.py`): `DEFAULT_RAG_CHILD_POOL=15` (match breadth),
+  `DEFAULT_RAG_MAX_PARENTS=4` (distinct pages → LLM). Exact cosine over the
+  loaded matrix; swap in FAISS/Chroma or Vertex Vector Search to scale.
+- **WEG/OOB source files are skipped** — those have their own deterministic
+  pipelines and are not part of the RAG corpus.
+
+```bash
+pip install -e ".[rag]"                      # pymupdf + numpy + google-genai
+export GEMINI_API_KEY=...                     # https://aistudio.google.com/apikey
+python scripts/ingest_rag.py                  # embed every PDF in rag_docs/ -> data/rag.db
+python scripts/ingest_rag.py --pdf rag_docs/China_Military_Power_2019.pdf  # one file
+
+# Offline alternative (no API key): pip install -e '.[rag-local]'
+COG_EMBED_BACKEND=local python scripts/ingest_rag.py
+```
+
+> **Note:** the embedding dimension is baked into `data/rag.db`. If you switch
+> backend/model/dimension, re-run `ingest_rag.py` to rebuild the store.
+
+## COG agent (LangGraph)
+
+Workflow: **resolve_scenario → retrieve → retrieve_context → CC → CR → CV/CoG**.
+
+- **resolve_scenario** (deterministic): turns the free-text query into structured
+  filters. A weapon → designator (via the CN→Latin crosswalk); a location →
+  responsible theater(s) via a hand-authored map (`cog/scenario.py`,
+  `Taiwan → Eastern+Southern`). Entity selection never touches the LLM.
+- **retrieve** (deterministic): the WEG×OOB capability laydown join (ground truth).
+- **retrieve_context** (RAG): embeds the entity-scoped query and fetches cited
+  snippets. **Optional** — if `data/rag.db` is absent the agent runs without it.
+- **CC / CR / CV-CoG**: LangChain structured output with hard prompt constraints
+  (omit INA metrics; CoG must name an entity in the evidence). RAG context feeds
+  **CR / CV / CoG only** — capability extraction (CC) stays metric-grounded.
+
+```bash
+pip install -e ".[agent,rag]"    # langgraph + embeddings
+
+# Location-driven (theater inferred, designator inferred, RAG context pulled):
+python scripts/run_cog_agent.py --query "Assess the J-20 threat to Taiwan"
+
+# Explicit overrides still win:
+python scripts/run_cog_agent.py \\
+    --query "Assess J-20 eastern theater laydown" \\
+    --designator J-20 --theater Eastern
+```
+
+Graph state carries `raw_assets`, `context_snippets`, `critical_capabilities`,
+`critical_requirements`, `critical_vulnerabilities`, and `cog_statement` — the
+structured layers cite WEG/OOB URLs, the context layer cites `file p.N`.
 
 ## Layout
-
-The code is split into a reusable **engine**, a pluggable **domain pack**, and
-the deterministic **WEG document pipeline**.
 
 ```text
 cog-analyst/
   src/cog_analyst/
     config.py                     # paths + LLM backend resolution (.env aware)
-    models/schemas.py             # WeaponSpecification, AircraftSpecification,
-                                  #   RadarSpecification, OutpostInfrastructure
-    ingestion/                    # ENGINE (domain-agnostic)
-      interfaces.py               # StructuredExtractor ABC + ExtractionError
-      extractor.py                # OpenAI-compatible .with_structured_output wrapper
-      pipeline.py                 # generic extract -> validate -> persist (raw)
-      entity_guard.py             # EntityRegistry deterministic allowlist
-      weg_pdf.py                  # WEG layout-stream scraper (deterministic)
+    ingestion/
+      weg_pdf.py                    # WEG layout-stream scraper (deterministic)
+      oob_markdown.py             # PLA OOB Markdown table scraper (deterministic)
+      designator.py               # Chinese→Latin aircraft designator crosswalk
+      interfaces.py / extractor.py  # optional OpenAI-compatible structured output
     db/
-      database.py                 # connect + init + insert_* (writes)
-      queries.py                  # counts, get_* (reads)
-      document_store.py           # weg_assets UPSERT + reads (hybrid store)
-      weg_queries.py              # JSON1 agent-tool reads (search/sections/...)
-    domains/spratly/              # DOMAIN PACK (Spratly-specific)
-      registry.py                 # MASTER_REEFS + REEF_REGISTRY
-      source.py                   # Dahm 2021 citation + demo excerpts
+      database.py                 # connect()
+      document_store.py           # weg_assets UPSERT + reads
+      weg_queries.py              # JSON1 agent-tool reads
+      oob_store.py / oob_queries.py
+      join_queries.py             # WEG × OOB capability laydown join
+      rag_store.py                # SQLite vector store + cosine search
+    rag/
+      embedder.py                 # Embedder ABC + Google/local implementations
+      chunking.py                 # parent-child PDF chunker (page parents + windows)
+    cog/
+      graph.py / nodes.py / schemas.py / state.py
+      scenario.py                 # query → deterministic filters (location→theater)
   scripts/
-    ingest_spratly.py             # LLM pipeline (--demo / --snippets / --backend)
-    ingest_weg.py                 # deterministic WEG PDF -> data/weg.db (China-only)
-    query_weg.py                  # demo CLI for the JSON1 query/tool layer
-  tests/                          # no live LLM or network required
+    ingest_weg.py / ingest_oob.py / ingest_rag.py
+    query_weg.py / query_laydown.py
+    run_cog_agent.py
+  tests/                          # offline except [agent] integration
 ```
 
 ## Setup
@@ -168,15 +285,15 @@ Requires Python 3.9+.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev,llm,pdf]"
-# llm: LangChain extractor   pdf: WEG scraper (PyMuPDF)
-cp .env.example .env          # choose a backend (ChatGPT / Grok / Ollama) and fill it in
+pip install -e ".[dev,pdf,agent,rag]"
+# pdf: WEG scraper   agent: LangGraph   rag: embeddings   dev: pytest/ruff/mypy
+cp .env.example .env          # LLM backend for run_cog_agent.py (nodes 2–4)
 ```
 
 ## Choosing an LLM backend (ChatGPT, Grok, or local Ollama)
 
-The extractor runs against any **OpenAI-compatible** endpoint. Set it once in
-`.env` (auto-loaded) via `COG_LLM_BACKEND`:
+The COG agent (nodes 2–4) runs against any **OpenAI-compatible** endpoint. Set
+it once in `.env` (auto-loaded) via `COG_LLM_BACKEND`:
 
 | `COG_LLM_BACKEND` | What runs | What you need |
 |---|---|---|
@@ -184,30 +301,7 @@ The extractor runs against any **OpenAI-compatible** endpoint. Set it once in
 | `ollama` | Local model (`qwen2.5`) | Ollama installed + `ollama serve` |
 | `lmstudio` | Local LM Studio server | LM Studio running |
 
-Precedence is **CLI flag > `.env` / env var > default**, so you can also flip
-per-run with `--backend openai|ollama|lmstudio` or `--base-url`.
-
-## Run the LLM ingestion engine
-
-The deterministic stages are fully tested without any API key. To run the full
-pipeline (including LLM extraction) against the bundled, citation-tagged excerpts:
-
-```bash
-python scripts/ingest_spratly.py --demo                  # uses COG_LLM_BACKEND from .env
-python scripts/ingest_spratly.py --demo --backend ollama # force local Ollama
-```
-
-Or ingest your own passages:
-
-```bash
-# snippets.json: {"weapons": [...], "aircraft": [...], "radar": [...], "outposts": [...]}
-python scripts/ingest_spratly.py --snippets snippets.json
-```
-
-**Note:** smaller local models (7–8B) trip schema validation more often than
-GPT-4o-mini. That is the pipeline working as designed — those records are
-reported as `validation_error` and never persisted. Try
-`--structured-method function_calling` if a model struggles with structured output.
+Precedence is **env var > default**. Ingest scripts need no API key.
 
 ## Tests
 
@@ -215,9 +309,22 @@ reported as `validation_error` and never persisted. Try
 pytest
 ```
 
-The suite injects a `FakeExtractor` and a deterministic embedder
-(`tests/conftest.py`), and builds a synthetic WEG-style PDF, so the entire system
-— LLM pipeline, entity guard, and document scraper — is verified offline.
+Deterministic ingestion, join queries, and the retrieve node run fully offline.
+Nodes 2–4 require ``pip install -e '.[agent]'`` and a configured LLM to exercise
+end-to-end via ``run_cog_agent.py``.
+
+### System walkthrough (one-stop review)
+
+`scripts/verify_system.py` is a **narrated tour** of every analysis capability —
+designator crosswalk → scenario resolution → WEG → OOB → join → RAG → the full
+COG graph — printed as a plain-English report, not just pass/fail. It uses the
+real `data/` stores when present (else seeds a tiny fixture) and runs the agent
+graph **offline** with a stub LLM by default.
+
+```bash
+python scripts/verify_system.py                # offline narrated walkthrough
+python scripts/verify_system.py --with-agent   # drive a live LLM through the graph
+```
 
 ## Provenance & disclaimer
 

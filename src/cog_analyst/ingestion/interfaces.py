@@ -3,7 +3,7 @@
 The extractor boundary is expressed as an ABC (nominal, explicit inheritance)
 rather than a Protocol, so implementations must subclass and ``isinstance``
 checks are reliable. A universal ``TSchema`` TypeVar lets a single extractor
-serve every schema in :mod:`cog_analyst.models.schemas`.
+serve every Pydantic schema passed to :meth:`StructuredExtractor.extract`.
 """
 
 from __future__ import annotations
@@ -11,11 +11,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Type, TypeVar
 
-from cog_analyst.models.schemas import CogBaseModel
+from pydantic import BaseModel
 
 __all__ = ["TSchema", "StructuredExtractor", "ExtractionError"]
 
-TSchema = TypeVar("TSchema", bound=CogBaseModel)
+TSchema = TypeVar("TSchema", bound=BaseModel)
 
 
 class ExtractionError(RuntimeError):

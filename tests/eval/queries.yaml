@@ -1,0 +1,355 @@
+# Gold retrieval set for RAG eval (NOT a pytest unit test).
+#
+# Run it with:  python tests/eval/eval_rag_retrieval.py
+#
+# WHAT MAKES A CASE VALID
+#   A case is meaningful only if its `expected` pages GENUINELY answer the
+#   `query`. Every expected page carries a `quote`: the exact text on that page
+#   that makes it relevant. The runner re-checks each quote against the stored
+#   page text on every run, so a typo'd or moved quote is caught automatically.
+#
+# FIELDS
+#   id        label only (used by --only and the summary); not scored.
+#   query     the analyst question that gets embedded and run against the corpus.
+#   expected  the answer key: pages that should be retrieved, each with a `quote`.
+#   verified  true once the quote was confirmed against the actual page text.
+#   note      what "relevant" means here / caveats.
+#
+# PAGE NUMBERS are PDF page indices (PyMuPDF, 1-based) — the same number in the
+# `file p.N` citation, NOT the printed page number.
+#
+# Coverage target: >=3 cases per source document and >=4 per query type
+# (entity/designator, location/theater, doctrine/concept, capability/role).
+
+# ---------------------------------------------------------------------------
+# Strike / missiles (entity + capability)
+# ---------------------------------------------------------------------------
+- id: rocket_force_taiwan
+  query: "PLA Rocket Force ballistic missiles targeting Taiwan"
+  expected:
+    - source: ANNUAL-REPORT-TO-CONGRESS-MILITARY-AND-SECURITY-DEVELOPMENTS-INVOLVING-THE-PEOPLES-REPUBLIC-OF-CHINA-2025.pdf
+      page: 89
+      quote: "The Eastern Theater Command is responsible for operations in the East China Sea and against Taiwan. Much of China's conventional missile firepower is also based within"
+    - source: China_Military_Power_2019.pdf
+      page: 101
+      quote: "APPENDIX D: PLA Rocket Force"
+  verified: true
+  note: "PLARF conventional missile firepower oriented at Taiwan (Eastern Theater) + Rocket Force appendix."
+
+- id: df26_guam_missile
+  query: "DF-26 intermediate-range ballistic missile that can range Guam"
+  expected:
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2024.pdf
+      page: 101
+      quote: "DF-26 intermediate range ballistic missile is a capable of ranging Guam and can conduct nuclear, precision conventional, and maritime attacks"
+  verified: true
+  note: "DF-26 'Guam killer' dual-capable IRBM."
+
+- id: df21d_antiship_missile
+  query: "DF-21D anti-ship ballistic missile carrier killer"
+  expected:
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2022.pdf
+      page: 85
+      quote: "DF-21D has a range exceeding 1,500 km, is fitted with a maneuverable reentry vehicle (MaRV)"
+  verified: true
+  note: "DF-21D anti-ship ballistic missile (ASBM)."
+
+- id: hypersonic_fobs
+  query: "fractional orbital bombardment system with hypersonic glide vehicle"
+  expected:
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2024.pdf
+      page: 115
+      quote: "first fractional orbital launch of an ICBM with a HGV from China. This demonstrated the greatest distance flown"
+  verified: true
+  note: "2021 FOBS test pairing an ICBM with a hypersonic glide vehicle."
+
+- id: bvr_air_to_air_missile
+  query: "beyond visual range air-to-air missile"
+  expected:
+    - source: OffensiveDefensiveStrike.pdf
+      page: 19
+      quote: "purpose-built to carry up to four long-range PL-15 AAMs in its internal weapons bay. The PL-15 has a purported range of 150 kilometers"
+  verified: true
+  note: "PL-15 is the PLA's primary long-range (BVR) air-to-air missile."
+
+- id: antiship_strike_carrier
+  query: "anti-ship cruise missile strike against a carrier group"
+  expected:
+    - source: OffensiveDefensiveStrike.pdf
+      page: 27
+      quote: "YJ-12s, YJ-62s, YJ-82s, YJ-83s, and CM-401s converge on an enemy carrier"
+  verified: true
+  note: "Saturation ASCM salvo concept against a carrier strike group."
+
+- id: hq9_air_defense
+  query: "HQ-9 surface-to-air missile and naval air defense"
+  expected:
+    - source: China_Military_Power_2019.pdf
+      page: 80
+      quote: "HQ-9 SAM (55-NM range) and YJ-62 antiship cruise missiles"
+    - source: OffensiveDefensiveStrike.pdf
+      page: 13
+      quote: "the newest fielded variant in the PLA's HQ-9 SAM series"
+  verified: true
+  note: "HQ-9 long-range SAM for area air defense."
+
+# ---------------------------------------------------------------------------
+# Air power (entity + capability)
+# ---------------------------------------------------------------------------
+- id: j20_stealth_fighter
+  query: "J-20 stealth fighter capabilities"
+  expected:
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2022.pdf
+      page: 80
+      quote: "thrust-vectoring engine nozzles, and adding super cruise capability by installing higher-thrust indigenous WS-15 engines"
+    - source: China_Military_Power_2019.pdf
+      page: 98
+      quote: "Aircraft Systems Characteristics"
+  verified: true
+  note: "The corpus covers the J-20 mainly via fighter-modernization prose (WS-15 is its engine) and a spec table, not a dedicated narrative."
+
+- id: strategic_bomber_h6
+  query: "PLAAF H-6 strategic bomber force"
+  expected:
+    - source: China_Military_Power_2019.pdf
+      page: 95
+      quote: "Bombers. China's bomber force comprises variants of the H-6 Badger bomber"
+  verified: true
+  note: "H-6 (Badger-derived) bomber family; H-6N adds air-launched ballistic missile / refueling reach."
+
+- id: aewc_early_warning
+  query: "airborne early warning and control AEW&C aircraft"
+  expected:
+    - source: OffensiveDefensiveStrike.pdf
+      page: 33
+      quote: "Large aircraft, such as the KJ-500 AEW&C aircraft, operating from China's SCS airfields will be critical to SCS carrier operations"
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2022.pdf
+      page: 81
+      quote: "These aircraft amplify PLAAF's ability to detect, track, and target threats"
+  verified: true
+  note: "KJ-500 / KJ-200 AEW&C platforms. Avoid the glossary pages that merely define the acronym."
+
+- id: strategic_airlift_y20
+  query: "Y-20 strategic transport and airlift"
+  expected:
+    - source: China_Military_Power_2019.pdf
+      page: 97
+      quote: "Y-20 large transport aircraft for introduction into the PLA's operational"
+  verified: true
+  note: "Y-20 heavy transport underpins strategic airlift / tanker derivatives."
+
+# ---------------------------------------------------------------------------
+# Naval (entity + capability)
+# ---------------------------------------------------------------------------
+- id: aircraft_carrier
+  query: "PLA Navy aircraft carrier program"
+  expected:
+    - source: ANNUAL-REPORT-TO-CONGRESS-MILITARY-AND-SECURITY-DEVELOPMENTS-INVOLVING-THE-PEOPLES-REPUBLIC-OF-CHINA-2025.pdf
+      page: 24
+      quote: "the PLA Navy (PLAN) completed the inaugural sea trials of its third aircraft carrier—Fujian, also known as CV-18"
+  verified: true
+  note: "PLAN carrier program, Fujian/CV-18."
+
+- id: largest_navy
+  query: "size of the PLA Navy, the world's largest navy"
+  expected:
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2024.pdf
+      page: 9
+      quote: "largest navy in the world, with a battle force of over 370 ships and submarines, including more than 140 major surface combatants"
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2024.pdf
+      page: 62
+      quote: "the PRC has the largest navy in the world with a battle force of over 370 ships and submarines, including more than 140 major surface combatants"
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2022.pdf
+      page: 70
+      quote: "The PLAN is numerically the largest navy in the world with an overall battle force of approximately 340 ships and submarines"
+  verified: true
+  note: "PLAN fleet size headline (~370 ships)."
+
+- id: type055_cruiser
+  query: "Type 055 Renhai guided-missile cruiser"
+  expected:
+    - source: OffensiveDefensiveStrike.pdf
+      page: 26
+      quote: "Type-055 Renhai cruiser also carry the vertically launched YJ-18 long-range ASCM"
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2022.pdf
+      page: 74
+      quote: "The RENHAI has 112 VLS cells and can carry a large load out of weapons"
+  verified: true
+  note: "Type 055 Renhai large surface combatant with YJ-18 ASCM."
+
+- id: ssbn_attack_submarine
+  query: "PLA Navy nuclear submarines SSN and SSBN fleet"
+  expected:
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2022.pdf
+      page: 73
+      quote: "twelve nuclear submarines – two SHANG I class SSNs (Type 093), four SHANG II class SSNs (Type 093A), and six JIN class SSBNs (Type 094)"
+  verified: true
+  note: "PLAN nuclear submarine force composition (Type 093 SSN, Type 094 SSBN)."
+
+# ---------------------------------------------------------------------------
+# Nuclear (capability)
+# ---------------------------------------------------------------------------
+- id: nuclear_warhead_stockpile
+  query: "China's nuclear warhead stockpile growth projections"
+  expected:
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2024.pdf
+      page: 11
+      quote: "operational nuclear warheads in its stockpile as of mid-2024 and will have over 1,000 operational nuclear warheads by 2030"
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2022.pdf
+      page: 118
+      quote: "Hawkish PRC state media outlets have asserted that the PRC needs 1,000 warhead"
+  verified: true
+  note: "DoD warhead stockpile estimate and 2030 projection."
+
+# ---------------------------------------------------------------------------
+# Doctrine / concepts
+# ---------------------------------------------------------------------------
+- id: a2ad_counter_intervention
+  query: "anti-access area denial counter-intervention strategy"
+  expected:
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2022.pdf
+      page: 101
+      quote: "Joint Capabilities for Counter-intervention The PRC's counter-intervention strategy aims to restrict the United States from having a presence in China's immediate periphery"
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2022.pdf
+      page: 14
+      quote: "defeat third-party intervention in the Indo-Pacific region"
+  verified: true
+  note: "Counter-intervention / defeat third-party intervention is the doctrinal term for A2/AD."
+
+- id: mdpw_concept
+  query: "Multi-Domain Precision Warfare operational concept"
+  expected:
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2022.pdf
+      page: 59
+      quote: "MDPW is intended to leverage a C4ISR network"
+  verified: true
+  note: "MDPW is the PLA's core operational concept built on a C4ISR/network-information system."
+
+- id: amphibious_invasion_taiwan
+  query: "amphibious invasion of Taiwan Joint Island Landing Campaign"
+  expected:
+    - source: ANNUAL-REPORT-TO-CONGRESS-MILITARY-AND-SECURITY-DEVELOPMENTS-INVOLVING-THE-PEOPLES-REPUBLIC-OF-CHINA-2025.pdf
+      page: 47
+      quote: "Joint Island Landing Campaign (JILC). An amphibious invasion of Taiwan would involve a highly complex three-dimensional assault"
+  verified: true
+  note: "JILC: the doctrinal amphibious invasion-of-Taiwan campaign."
+
+- id: blockade_taiwan
+  query: "PLA joint blockade campaign against Taiwan"
+  expected:
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2024.pdf
+      page: 139
+      quote: "Air and Maritime Blockade. PLA writings describe a Joint Blockade Campaign in which the PRC would employ blockades of maritime and air traffic"
+  verified: true
+  note: "Joint Blockade Campaign coercion option short of invasion."
+
+- id: military_civil_fusion
+  query: "Military-Civil Fusion development strategy"
+  expected:
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2024.pdf
+      page: 38
+      quote: 'Development Strategy to "fuse" its security and development systems'
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2022.pdf
+      page: 47
+      quote: 'Development Strategy to "fuse" its security and development strategies to build an integrated National Strategic System'
+  verified: true
+  note: "MCF fuses civilian and defense industrial bases."
+
+# ---------------------------------------------------------------------------
+# Location / theater
+# ---------------------------------------------------------------------------
+- id: southern_theater_command
+  query: "Southern Theater Command responsibilities South China Sea"
+  expected:
+    - source: ANNUAL-REPORT-TO-CONGRESS-MILITARY-AND-SECURITY-DEVELOPMENTS-INVOLVING-THE-PEOPLES-REPUBLIC-OF-CHINA-2025.pdf
+      page: 92
+      quote: "Southern Theater Command is responsible for operations in the South China Sea and support to the Eastern Theater command during a Taiwan contingency"
+  verified: true
+  note: "Theater-command geography: Southern Theater = SCS."
+
+- id: scs_island_reefs
+  query: "South China Sea island-reef military outposts"
+  expected:
+    - source: ANNUAL-REPORT-TO-CONGRESS-MILITARY-AND-SECURITY-DEVELOPMENTS-INVOLVING-THE-PEOPLES-REPUBLIC-OF-CHINA-2025.pdf
+      page: 55
+      quote: "Fiery Cross Reef, Subi Reef, and Mischief Reef. The bases in the Spratly Islands significantly diminish the average time"
+  verified: true
+  note: "Spratly island-reef bases (Fiery Cross / Subi / Mischief)."
+
+- id: india_border_lac
+  query: "China India border tensions Line of Actual Control"
+  expected:
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2022.pdf
+      page: 135
+      quote: "sustained tensions along the India-China border dominated the Western Theater Command's attention"
+  verified: true
+  note: "India-China LAC standoff; Western Theater Command focus."
+
+- id: overseas_bases_logistics
+  query: "PLA overseas bases and global logistics network"
+  expected:
+    - source: ANNUAL-REPORT-TO-CONGRESS-MILITARY-AND-SECURITY-DEVELOPMENTS-INVOLVING-THE-PEOPLES-REPUBLIC-OF-CHINA-2025.pdf
+      page: 57
+      quote: "global logistics and basing network to allow the PLA to project and sustain military power at greater distances"
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2024.pdf
+      page: 156
+      quote: "have demonstrated a greater need for the PLA to operate outside of the PRC's immediate periphery"
+    - source: military-and-security-developments-involving-the-peoples-republic-of-china-2022.pdf
+      page: 18
+      quote: "expand its overseas logistics and basing infrastructure to allow the PLA to project and sustain military power at greater distances"
+  verified: true
+  note: "Overseas basing / power-projection logistics (e.g. Djibouti)."
+
+# ---------------------------------------------------------------------------
+# Space / cyber / EW (capability)
+# ---------------------------------------------------------------------------
+- id: cyber_operations_dod
+  query: "PLA cyber operations targeting US Department of Defense"
+  expected:
+    - source: ANNUAL-REPORT-TO-CONGRESS-MILITARY-AND-SECURITY-DEVELOPMENTS-INVOLVING-THE-PEOPLES-REPUBLIC-OF-CHINA-2025.pdf
+      page: 27
+      quote: "cyber goals almost certainly prioritize degrading U.S. force projection during conflict"
+  verified: true
+  note: "PLA cyber targeting of US force projection."
+
+- id: counterspace_asat
+  query: "Chinese counterspace and anti-satellite capabilities"
+  expected:
+    - source: ANNUAL-REPORT-TO-CONGRESS-MILITARY-AND-SECURITY-DEVELOPMENTS-INVOLVING-THE-PEOPLES-REPUBLIC-OF-CHINA-2025.pdf
+      page: 29
+      quote: "Counterspace Developments China perceives that the U.S. military heavily relies on space"
+  verified: true
+  note: "Counterspace / ASAT to deny US space-enabled C4ISR."
+
+- id: electronic_warfare
+  query: "PLA electronic warfare jamming capabilities"
+  expected:
+    - source: ANNUAL-REPORT-TO-CONGRESS-MILITARY-AND-SECURITY-DEVELOPMENTS-INVOLVING-THE-PEOPLES-REPUBLIC-OF-CHINA-2025.pdf
+      page: 30
+      quote: "Electronic Warfare (EW): China fields a range of ground-based jammers"
+  verified: true
+  note: "Ground- and space-based EW jamming."
+
+# ---------------------------------------------------------------------------
+# Resourcing / sustainment (capability)
+# ---------------------------------------------------------------------------
+- id: defense_spending
+  query: "China's defense budget and military spending"
+  expected:
+    - source: ANNUAL-REPORT-TO-CONGRESS-MILITARY-AND-SECURITY-DEVELOPMENTS-INVOLVING-THE-PEOPLES-REPUBLIC-OF-CHINA-2025.pdf
+      page: 62
+      quote: "second-largest military spender in the world after the United States"
+  verified: true
+  note: "Defense spending scale; published budget understates actual."
+
+- id: logistics_vulnerabilities
+  query: "PLA logistics and sustainment weaknesses"
+  expected:
+    - source: China_Military_Power_2019.pdf
+      page: 58
+      quote: "enable a transition from a rigid command-directed and manpower-dependent system"
+    - source: OffensiveDefensiveStrike.pdf
+      page: 39
+      quote: "addresses virtually all the shortcomings and challenges related to C4ISR and logistics described in the Science of Campaigns"
+  verified: true
+  note: "PLA logistics modernization away from a rigid/manpower-dependent system; C4ISR & logistics shortcomings."

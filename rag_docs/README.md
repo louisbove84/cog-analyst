@@ -1,22 +1,26 @@
 # Source documents (local only)
 
-PDFs in this folder are **not committed** to git (see `.gitignore`). Place
-your open-source reference documents here before running ingestion.
+PDFs and Markdown exports in this folder are **not committed** to git (see
+`.gitignore`). Place your open-source reference documents here before running
+ingestion.
 
-## Required for v1 Spratly ingestion
+## Structured ground-truth sources (deterministic ingest)
 
-- `OffensiveDefensiveStrike.pdf` — Dahm (2021), JHU/APL, *Offensive and
-  Defensive Strike* (NSAD-R-21-016). This is the core source for weapon and
-  outpost extraction.
+- `fullwegexportcompressed.pdf` — ODIN **Worldwide Equipment Guide** export.
+  Ingested deterministically into `data/weg.db` (China-only by default).
+- `pla_air_oob.md` — saved Chinese Wikipedia PLA air OOB article. Ingested
+  deterministically into `data/oob.db`.
 
-## Reserved for future RAG phases
+## RAG corpus (embedded for cited context)
 
-These are referenced in project planning but not used by the v1 SQLite engine:
+Everything else here is chunked + embedded into `data/rag.db` by
+`scripts/ingest_rag.py` (the WEG source above is skipped automatically):
 
-- `ANNUAL-REPORT-TO-CONGRESS-MILITARY-AND-SECURITY-DEVELOPMENTS-INVOLVING-THE-PEOPLES-REPUBLIC-OF-CHINA-2025.pdf`
-- `China_Military_Power_2019.pdf`
-- `military-and-security-developments-involving-the-peoples-republic-of-china-2022.pdf`
-- `military-and-security-developments-involving-the-peoples-republic-of-china-2024.pdf`
+- DoD *China Military Power* reports (2019 / 2022 / 2024 / 2025)
+- `OffensiveDefensiveStrike.pdf` and other think-tank analyses
 
-Obtain copies from official/public sources (DoD, JHU/APL, etc.) and drop them
-into this directory locally.
+These supply **doctrinal context only** — the agent cites them (`file p.N`) but
+never treats them as authoritative over the structured stores.
+
+Obtain copies from official/public sources and drop them into this directory
+locally.

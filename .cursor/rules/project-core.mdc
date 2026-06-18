@@ -5,43 +5,62 @@ alwaysApply: true
 # cog-analyst — Core Principles
 
 ## Mission
-Grounded military OSINT ingestion. **Primary goal: eliminate hallucination.**
+Grounded military OSINT analysis. **Primary goal: eliminate hallucination.**
 Persisted facts and answers must trace to deterministic sources or validated,
 cited extraction. Project focus: **Chinese air power / A2AD** (air-domain corpus).
 
 ## Source of truth
-- `data/weg.db` (WEG hybrid document store) is the **canonical catalog**.
-- The ODIN WEG PDF is parsed **deterministically** — no LLM in that path.
-- Default ingest is China-only (`--origin China`; `--all-origins` to override).
+- `data/weg.db` (WEG hybrid document store) is the **canonical catalog** of asset
+  capabilities; `data/oob.db` is the **force-laydown** layer (units/bases) that
+  joins it by `en_designator`. Both are built **deterministically — no LLM**.
+- Default WEG ingest is China-only (`--origin China`; `--all-origins` to override).
 
 ## Two ingestion paths (keep them separate)
 1. **WEG pipeline** (`ingestion/weg_pdf.py` → `db/document_store.py`): typography
    scraper → UPSERT by `asset_title` → nested `dynamic_payload` JSON.
-2. **LLM Spratly slice** (`ingestion/pipeline.py` + `domains/spratly/`): untrusted
-   extractor → Pydantic validate → raw persist. Reconcile to WEG later via
-   normalize + exact match (+ small alias table). **No fuzzy/embedding matching.**
+2. **OOB pipeline** (`ingestion/oob_markdown.py` + `designator.py` →
+   `db/oob_store.py`): stateful Markdown table scraper, **content-based** (not
+   positional) cell classification, Chinese→Latin designator crosswalk →
+   `units`/`unit_aircraft` UPSERT. Source is Wikipedia (snapshot, lower
+   confidence than WEG).
+
+## Agent layer
+- **Join** (`db/join_queries.py`): `ATTACH` WEG to OOB; `capability_laydown()`
+  returns one grounded row per unit/aircraft/WEG-spec triple.
+- **RAG** (`rag/`, `db/rag_store.py`): doctrinal PDFs (DoD CMPR, think-tank)
+  chunked + **embedded** into a vector store for semantic retrieval. RAG is
+  **supplementary context, subordinate to structured ground truth** — it never
+  selects entities and never overrides DB facts; every snippet is cited
+  (filename + page). Embedder is swappable (local sentence-transformers default).
+- **Graph** (`cog/graph.py`): resolve_scenario → retrieve_structured →
+  retrieve_context (RAG) → CC → CR → CV/CoG. Structured retrieval is
+  deterministic and anchors the entity set; RAG context feeds **CR/CV/CoG only**
+  (CC stays metric-grounded). CoG must name an entity present in the evidence.
 
 ## Layer boundaries
-- **Engine** (`ingestion/`, `models/`, `db/`): domain-agnostic.
-- **Domain pack** (`domains/spratly/`): registry, demo snippets, citations only.
-- **Scripts** (`scripts/`): thin CLIs wiring engine + domain; never inside `src/`.
+- **Engine** (`ingestion/`, `db/`, `cog/`): domain-agnostic.
+- **Scripts** (`scripts/`): thin CLIs; never inside `src/`.
 
 ## Conventions
 - Contracts use **ABC**, not `Protocol` (`ingestion/interfaces.py`); use `TypeVar`.
 - Persistence is **pure functions over `sqlite3.Connection`** — no ORM, no god-object
-  store. All SQL parameterized; reads (`queries.py`, `weg_queries.py`) separate from
-  writes (`database.py`, `document_store.py`).
-- Pydantic schemas: `extra="forbid"`, strip whitespace, non-negative numerics,
-  required `source_citation`.
+  store. All SQL parameterized; reads separate from writes.
+- Pydantic agent schemas: `extra="forbid"`, strip whitespace where applicable.
 - snake_case funcs/vars, PascalCase classes, type hints, Google-style docstrings.
-- Lazy-import optional deps (LangChain, PyMuPDF) so tests run offline.
+- Lazy-import optional deps (LangChain, LangGraph, PyMuPDF) so tests run offline.
+
+## Grounding hierarchy (important)
+- Structured DBs (`weg.db`, `oob.db`) are **ground truth**. The RAG vector store
+  is **context only**: it may explain or corroborate, never define entities or
+  override a structured fact. If RAG and a DB disagree, the DB wins.
 
 ## Do not reintroduce
-- Scrubber / similarity resolver / sentence-transformers dedup.
-- Vector stores or embeddings.
+- Spratly domain pack / hub-and-spoke reef ingest / scrubber.
+- Using embeddings/fuzzy matching to **dedup or canonicalize structured rows**
+  (designator joins stay deterministic). Embeddings are for RAG retrieval only.
 - `Protocol`-based contracts, ORMs, or a web/Flask layer.
 
 ## Hygiene
 - Never commit `.env`, `data/*.db`, `rag_docs/*.pdf`, or `*.log`.
-- Regenerate DBs via `scripts/ingest_weg.py`; don't hand-edit SQLite.
+- Regenerate DBs via ingest scripts; don't hand-edit SQLite.
 - Don't commit unless asked.
