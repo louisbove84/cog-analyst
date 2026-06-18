@@ -365,8 +365,10 @@ def verify_join(oob_path: Path, weg_path: Path, designator: str) -> None:
             h = linked[0]
             show("joined row", f"{h.unit_name} flies {h.en_designator}")
             show("  -> WEG asset", (h.weg_asset_title or "")[:46])
-            specs = join_queries.laydown_specs(conn, h.weg_asset_title)
-            show("  -> spec sample", dict(list(specs.items())[:2]))
+            weg_title = h.weg_asset_title
+            if weg_title:
+                specs = join_queries.laydown_specs(conn, weg_title)
+                show("  -> spec sample", dict(list(specs.items())[:2]))
         verdict(
             "join",
             len(hits) > 0,
